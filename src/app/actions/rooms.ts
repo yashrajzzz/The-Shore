@@ -169,7 +169,7 @@ export async function playNextSong(roomId: string) {
   return { success: true };
 }
 
-export async function sendMessage(roomId: string, content: string) {
+export async function sendMessage(roomId: string, content: string, messageId?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -179,6 +179,7 @@ export async function sendMessage(roomId: string, content: string) {
   const { error } = await supabase
     .from('messages')
     .insert({
+      id: messageId || undefined,
       room_id: roomId,
       user_id: user.id,
       user_email: user.email,

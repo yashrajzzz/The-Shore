@@ -87,7 +87,11 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
           .then(({ data }) => { if (data) setQueue(data); });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${room.id}` }, (payload) => {
-        setMessages(prev => [...prev, payload.new]);
+        setMessages(prev => {
+          // Prevent duplicates from optimistic updates
+          if (prev.some(m => m.id === payload.new.id)) return prev;
+          return [...prev, payload.new];
+        });
       })
       .subscribe();
 
@@ -198,9 +202,23 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
     if (!chatInput.trim()) return;
     const content = chatInput.trim();
     setChatInput('');
-    const res = await sendMessage(room.id, content);
+    
+    // Optimistic Update for instant UI
+    const messageId = crypto.randomUUID();
+    const tempMsg = {
+      id: messageId,
+      room_id: room.id,
+      user_id: user.id,
+      user_email: user.email,
+      content,
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempMsg]);
+
+    const res = await sendMessage(room.id, content, messageId);
     if (res?.error) {
       alert("Failed to send message: " + res.error);
+      setMessages(prev => prev.filter(m => m.id !== messageId));
     }
   };
 
