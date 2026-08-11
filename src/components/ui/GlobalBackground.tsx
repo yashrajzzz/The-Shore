@@ -10,31 +10,42 @@ export const setGlobalBackground = (urls: string | string[], interval: number = 
 };
 
 export function GlobalBackground() {
-  const [bgUrls, setBgUrls] = useState<string[]>([]);
+  const [bgUrls, setBgUrls] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const saved = localStorage.getItem('shore_bg');
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && parsed.urls) return parsed.urls;
+      return [];
+    } catch {
+      return [saved];
+    }
+  });
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timerInterval, setTimerInterval] = useState(30000);
+  const [timerInterval, setTimerInterval] = useState<number>(() => {
+    if (typeof window === 'undefined') return 30000;
+    const saved = localStorage.getItem('shore_bg');
+    if (!saved) return 30000;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.interval) return parsed.interval;
+      return 30000;
+    } catch {
+      return 30000;
+    }
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem('shore_bg');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setBgUrls(parsed);
-        } else if (parsed.urls) {
-          setBgUrls(parsed.urls);
-          if (parsed.interval) setTimerInterval(parsed.interval);
-        }
-      } catch {
-        // Fallback for old string format
-        setBgUrls([saved]);
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ urls: string[]; interval?: number }>;
+      if (ce?.detail) {
+        setBgUrls(Array.isArray(ce.detail.urls) ? ce.detail.urls : [String(ce.detail.urls)]);
+        if (ce.detail.interval) setTimerInterval(ce.detail.interval);
+        setCurrentIndex(0);
       }
-    }
-
-    const handler = (e: any) => {
-      setBgUrls(e.detail.urls);
-      if (e.detail.interval) setTimerInterval(e.detail.interval);
-      setCurrentIndex(0);
     };
     window.addEventListener('backgroundChange', handler);
     return () => window.removeEventListener('backgroundChange', handler);

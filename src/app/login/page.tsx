@@ -2,14 +2,13 @@
 import { Window } from "@/components/ui/Window";
 import { Button } from "@/components/ui/Button";
 import { login, signup } from "./actions";
-import { useState, use } from "react";
+import { useState, Suspense } from "react";
 
 import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginInner({ isLogin, setIsLogin }: { isLogin: boolean; setIsLogin: (v: boolean) => void }) {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
-  const [isLogin, setIsLogin] = useState(true);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6">
@@ -91,5 +90,15 @@ export default function LoginPage() {
         </Window>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  const [isLogin, setIsLogin] = useState(true);
+
+  return (
+    <Suspense fallback={null}>
+      <LoginInner isLogin={isLogin} setIsLogin={setIsLogin} />
+    </Suspense>
   );
 }
