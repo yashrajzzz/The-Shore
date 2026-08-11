@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #F1EAD9;
+  --color-cream-deep: #E3D8BE;
+  --color-paper: #F9F4E8;
+  --color-teal-1: #D3F0EC;
+  --color-teal-2: #9FDAD6;
+  --color-teal-3: #61B9BB;
+  --color-teal-deep: #3D8C8E;
+  --color-ink: #211D17;
+  --color-ink-soft: #4A443A;
+  --color-coral: #EFA98F;
+  --color-coral-deep: #DE8367;
+  --color-yellow: #F0C445;
+  --color-pink: #F2C9C3;
+
+  --font-mono: var(--font-space-mono), monospace;
+  --font-pixel: var(--font-vt323), monospace;
+  --font-arcade: var(--font-press-start), monospace;
+}
+
+:root {
+  --line: 2.5px;
+  --shadow-off: 5px;
+}
+
+body {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  overflow-x: hidden;
+}
+
+/* Base resets */
+* {
+  box-sizing: border-box;
+}
+
+/* Animations from prototype */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes driftbg {
+  0% { background-position: 0% 0%, 0% 0%, 0% 0%; }
+  100% { background-position: 20% 10%, -15% -10%, 10% 5%; }
+}
