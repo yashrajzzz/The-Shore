@@ -68,7 +68,7 @@ export function SongSearch({ onAddToQueue }: SongSearchProps) {
       const data = await res.json();
       setResults(data.results || []);
       setHasSearched(true);
-    } catch (err) {
+    } catch {
       setError('Search failed. Please try again.');
       setResults([]);
     } finally {

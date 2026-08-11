@@ -12,7 +12,6 @@ export function CreateRoomModal() {
   const [error, setError] = useState('');
   const [isPending, setIsPending] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

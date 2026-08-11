@@ -10,35 +10,30 @@ export const setGlobalBackground = (urls: string | string[], interval: number = 
 };
 
 export function GlobalBackground() {
-  const [bgUrls, setBgUrls] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    const saved = localStorage.getItem('shore_bg');
-    if (!saved) return [];
-    try {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed && parsed.urls) return parsed.urls;
-      return [];
-    } catch {
-      return [saved];
-    }
-  });
+  const [bgUrls, setBgUrls] = useState<string[]>([]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timerInterval, setTimerInterval] = useState<number>(() => {
-    if (typeof window === 'undefined') return 30000;
-    const saved = localStorage.getItem('shore_bg');
-    if (!saved) return 30000;
-    try {
-      const parsed = JSON.parse(saved);
-      if (parsed && parsed.interval) return parsed.interval;
-      return 30000;
-    } catch {
-      return 30000;
-    }
-  });
+  const [timerInterval, setTimerInterval] = useState<number>(30000);
 
   useEffect(() => {
+    // On mount, load saved background settings from localStorage (client-only)
+    if (typeof window === 'undefined') return;
+
+    const saved = localStorage.getItem('shore_bg');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // schedule state updates asynchronously to avoid calling setState synchronously within an effect
+        setTimeout(() => {
+          if (Array.isArray(parsed)) setBgUrls(parsed);
+          else if (parsed && parsed.urls) setBgUrls(parsed.urls);
+          if (parsed && parsed.interval) setTimerInterval(parsed.interval);
+        }, 0);
+      } catch {
+        setTimeout(() => setBgUrls([saved]), 0);
+      }
+    }
+
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ urls: string[]; interval?: number }>;
       if (ce?.detail) {

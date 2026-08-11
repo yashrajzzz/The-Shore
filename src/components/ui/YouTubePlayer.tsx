@@ -116,11 +116,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         // Same video, just toggle play/pause
         return;
       }
-
+ 
       // Different video or first load - create or load new video
       if (playerRef.current) {
         currentVideoIdRef.current = videoId;
         playerRef.current.loadVideoById(videoId);
+        // If the room is currently playing, ensure the loaded video starts
+        try {
+          if (playing) {
+            playerRef.current.playVideo();
+          }
+        } catch {
+          // ignore if player not ready
+        }
         return;
       }
 

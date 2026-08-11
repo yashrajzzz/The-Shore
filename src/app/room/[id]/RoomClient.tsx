@@ -8,9 +8,29 @@ import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlaye
 import { SongSearch } from '@/components/ui/SongSearch';
 import Image from 'next/image';
 import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
+import { InviteModal } from '@/components/ui/InviteModal';
+import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function RoomClient({ room: initialRoom, user }: { room: any, user: any }) {
+type Room = {
+  id?: string;
+  background_urls?: string[];
+  created_by?: string;
+  current_song_video_id?: string | null;
+  current_song_url?: string | null;
+  is_playing?: boolean;
+  current_song_started_at?: string | number | null;
+  current_song_title?: string;
+  current_song_artist?: string;
+  current_song_artwork?: string;
+  [k: string]: unknown;
+};
+
+type AppUser = { id?: string; email?: string };
+
+export default function RoomClient({ room: initialRoom, user }: { room: Room, user: AppUser }) {
+  type Listener = { email?: string; is_host?: boolean; [k: string]: unknown };
+  type QueueItem = { id?: string | number; artwork?: string; title?: string; artist?: string; [k:string]: unknown };
+  type Message = { id?: string | number; user_id?: string; user_email?: string; content?: string; created_at?: string; [k:string]: unknown };
   const [activeTab, setActiveTab] = useState('listeners');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
@@ -23,11 +43,15 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
 
   // Sync State
   const [room, setRoom] = useState(initialRoom);
-  const [listeners, setListeners] = useState<Record<string, unknown>[]>([]);
-  const [queue, setQueue] = useState<Record<string, unknown>[]>([]);
+  const roomIdStr = String((initialRoom && (initialRoom as Room).id) ?? (initialRoom as Room).id ?? '');
+  const userIdStr = String((user && (user as AppUser).id) ?? '');
+  const userEmailStr = String((user && (user as AppUser).email) ?? '');
+  const bgCount = Array.isArray(room.background_urls) ? room.background_urls.length : 0;
+  const [listeners, setListeners] = useState<Listener[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
 
   // Chat State
-  const [messages, setMessages] = useState<Record<string, unknown>[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -52,40 +76,46 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
   // Realtime subscriptions
   useEffect(() => {
     const supabase = createClient();
-    supabase.from('queue').select('*').eq('room_id', room.id).order('created_at', { ascending: true })
+    supabase.from('queue').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: true })
       .then(({ data }) => { if (data) setQueue(data); });
-    supabase.from('messages').select('*').eq('room_id', room.id).order('created_at', { ascending: false }).limit(50)
+    supabase.from('messages').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => { if (data) setMessages(data.reverse()); });
 
     const roomSub = supabase
       .channel('schema-db-changes')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, (payload: any) => {
-        setRoom(payload.new);
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdStr}` }, (payload: unknown) => {
+        const p = payload as { new?: Record<string, unknown> };
+        if (p.new) setRoom(p.new);
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue', filter: `room_id=eq.${room.id}` }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue', filter: `room_id=eq.${roomIdStr}` }, () => {
         supabase.from('queue').select('*').eq('room_id', room.id).order('created_at', { ascending: true })
           .then(({ data }) => { if (data) setQueue(data); });
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${room.id}` }, (payload: any) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdStr}` }, (payload: unknown) => {
+        const p = payload as { new?: Record<string, unknown> };
+        if (!p.new) return;
+        const newMsg = p.new as unknown as Message;
         setMessages(prev => {
-          if (prev.some(m => m.id === payload.new.id)) return prev;
-          return [...prev, payload.new];
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
         });
       })
       .subscribe();
 
-    const roomChannel = supabase.channel(`room:${room.id}`, { config: { presence: { key: user.id } } });
+    const roomChannel = supabase.channel(`room:${room.id}`, { config: { presence: { key: (user as { id?: string }).id } } });
     roomChannel
       .on('presence', { event: 'sync' }, () => {
         const state = roomChannel.presenceState();
-        setListeners(Object.keys(state).map(key => state[key][0]));
+        const s = state as Record<string, unknown>;
+        setListeners(Object.keys(s).map((key: string) => {
+          const val = s[key];
+          if (Array.isArray(val) && val.length > 0) return val[0] as unknown as Listener;
+          return {} as Listener;
+        }));
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await roomChannel.track({ user_id: user.id, email: user.email, is_host: room.created_by === user.id, joined_at: new Date().toISOString() });
+          await roomChannel.track({ user_id: (user as { id?: string }).id, email: (user as { email?: string }).email, is_host: (room as { created_by?: string }).created_by === (user as { id?: string }).id, joined_at: new Date().toISOString() });
         }
       });
 
@@ -93,13 +123,13 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
   }, [room.id, user.id, user.email, room.created_by]);
 
   useEffect(() => {
-    if (room.background_urls?.length > 0) setGlobalBackground(room.background_urls, timerInterval);
+    if (Array.isArray(room.background_urls) && room.background_urls.length > 0) setGlobalBackground(room.background_urls as string[], timerInterval);
   }, [room.background_urls, timerInterval]);
 
   const handleTimerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseInt(e.target.value) * 1000;
     setTimerInterval(v);
-    if (room.background_urls) setGlobalBackground(room.background_urls, v);
+    if (Array.isArray(room.background_urls)) setGlobalBackground(room.background_urls as string[], v);
   };
 
   const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,7 +148,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
     }
     if (uploadedUrls.length > 0) {
       const newUrls = [...currentUrls, ...uploadedUrls];
-      await updateRoomBackgrounds(room.id, newUrls);
+      await updateRoomBackgrounds(roomIdStr, newUrls);
       setGlobalBackground(newUrls, timerInterval);
     }
     setIsUploading(false);
@@ -128,29 +158,52 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
     const newUrls = (room.background_urls || []).filter((_: unknown, i: number) => i !== idx);
     setRoom({ ...room, background_urls: newUrls });
     setGlobalBackground(newUrls, timerInterval);
-    await updateRoomBackgrounds(room.id, newUrls);
+    await updateRoomBackgrounds(roomIdStr, newUrls);
   };
 
   const handleAddToQueue = useCallback(async (song: { videoId: string; title: string; artist: string; artwork: string; duration: number }) => {
-    await addToQueue(room.id, song);
-  }, [room.id]);
+    await addToQueue(roomIdStr, song);
+  }, [roomIdStr]);
 
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
     const content = chatInput.trim();
     setChatInput('');
     const messageId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: messageId, room_id: room.id, user_id: user.id, user_email: user.email, content, created_at: new Date().toISOString() }]);
-    const res = await sendMessage(room.id, content, messageId);
+    setMessages(prev => [...prev, { id: messageId, room_id: roomIdStr, user_id: userIdStr, user_email: userEmailStr, content, created_at: new Date().toISOString() }]);
+    const res = await sendMessage(roomIdStr, content, messageId);
     if (res?.error) { alert("Failed: " + res.error); setMessages(prev => prev.filter(m => m.id !== messageId)); }
   };
 
-  const handleNextSong = async () => { await playNextSong(room.id); };
-  const handleTogglePlay = async () => { await togglePlayPause(room.id); };
-  const handleYTEnd = useCallback(() => { if (room.created_by === user.id) playNextSong(room.id); }, [room.id, room.created_by, user.id]);
+  const handleNextSong = async () => {
+    if (isHost && ytPlayerRef.current) {
+      try { ytPlayerRef.current.pauseVideo(); } catch {}
+    }
+    const res = await playNextSong(roomIdStr);
+    if (res?.error) alert(res.error);
+  };
 
-  const currentVideoId = room.current_song_video_id || (room.current_song_url?.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) || null;
-  const isHost = room.created_by === user.id;
+  const handleTogglePlay = async () => {
+    // Optimistically toggle local player for host to avoid relying solely on DB round-trip
+    if (isHost && ytPlayerRef.current) {
+      try {
+        const state = ytPlayerRef.current.getPlayerState?.();
+        if (state === 1) ytPlayerRef.current.pauseVideo();
+        else ytPlayerRef.current.playVideo();
+      } catch {
+        // ignore
+      }
+    }
+
+    const res = await togglePlayPause(roomIdStr);
+    if (res?.error) alert(res.error);
+  };
+
+  const handleYTEnd = useCallback(() => { if (room.created_by === (user as AppUser).id) playNextSong(roomIdStr); }, [roomIdStr, room.created_by, userIdStr]);
+
+  const currentVideoId = room.current_song_video_id || (typeof room.current_song_url === 'string' ? (room.current_song_url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) : undefined) || null;
+  const isHost = room.created_by === (user as AppUser).id;
+  const startedAtVal: string | null = room.current_song_started_at == null ? null : (typeof room.current_song_started_at === 'string' ? room.current_song_started_at : new Date(Number(room.current_song_started_at)).toISOString());
 
   return (
     <div className="flex-1 relative flex flex-col w-full h-full pointer-events-none overflow-hidden">
@@ -158,10 +211,15 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
       <YouTubePlayer
         ref={ytPlayerRef}
         videoId={currentVideoId}
-        playing={room.is_playing}
-        startedAt={room.current_song_started_at}
+        playing={Boolean(room.is_playing)}
+        startedAt={startedAtVal}
         onEnd={handleYTEnd}
       />
+
+      {/* Enable audio prompt for listeners (non-hosts) */}
+      {!isHost && (
+        <EnableAudioPrompt roomId={roomIdStr} ytPlayerRef={ytPlayerRef} />
+      )}
 
       {/* Top Bar */}
       <div className="flex justify-end p-6 pointer-events-auto shrink-0">
@@ -187,7 +245,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
             )}
           </div>
         ) : (
-          (!room.background_urls || room.background_urls.length === 0) && (
+          (bgCount === 0) && (
             <div className="bg-paper/40 backdrop-blur-xl border-2 border-ink p-8 rounded-2xl shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center max-w-sm text-center">
               <div className="mb-4"><ImageIcon size={48} className="text-ink/80" /></div>
               <h3 className="font-pixel text-xl text-ink mb-2">Set the Vibe!</h3>
@@ -247,7 +305,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
           className="absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
 
         <div className="shrink-0 flex items-center justify-between px-6 py-5 border-b-[2.5px] border-ink bg-cream/50">
-          <h2 className="font-pixel text-xl text-ink leading-none truncate max-w-[200px]">{room.name}</h2>
+          <h2 className="font-pixel text-xl text-ink leading-none truncate max-w-[200px]">{String(room.name)}</h2>
           <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-full border-2 border-ink bg-coral flex items-center justify-center font-bold text-xs shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] shrink-0"><X size={16} /></button>
         </div>
 
@@ -271,15 +329,19 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                     {listener.email?.[0] || '?'}
                   </div>
                   <div className="overflow-hidden">
-                    <b className="text-xs block truncate font-mono">{listener.email?.split('@')[0] || 'Anonymous'}</b>
+                    <b className="text-xs block truncate font-mono">{(listener.email && typeof listener.email === 'string') ? listener.email.split('@')[0] : 'Anonymous'}</b>
                     <span className="text-[10px] text-ink-soft font-mono">{listener.is_host ? 'Host' : 'Listener'}</span>
                   </div>
                 </div>
               ))}
               <div className="mt-4 flex justify-center">
-                <button className="border-2 border-ink bg-teal-2 rounded-full px-6 py-2 text-xs font-bold font-mono shadow-[3px_3px_0_var(--color-ink)] hover:translate-y-px hover:translate-x-px hover:shadow-[2px_2px_0_var(--color-ink)] transition-all">
-                  + Invite Friends
-                </button>
+                {/* Invite modal button */}
+                <div>
+                  {/* InviteModal renders its own button and modal */}
+                  {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                  {/* @ts-ignore */}
+                  <InviteModal roomId={roomIdStr} roomName={String(room.name)} />
+                </div>
               </div>
             </div>
           )}
@@ -292,15 +354,15 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                   <div className="text-[9px] uppercase tracking-widest font-mono text-ink-soft/60 font-bold border-t-[1.5px] border-ink/20 pt-3">Up Next · {queue.length} songs</div>
                   <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
                     {queue.map((item, idx) => (
-                      <div key={item.id} className="bg-paper/50 border-[1.5px] border-ink/70 rounded-xl p-2 shadow-[2px_2px_0_var(--color-ink)] flex items-center gap-2.5">
+                      <div key={(item.id ?? idx) as React.Key} className="bg-paper/50 border-[1.5px] border-ink/70 rounded-xl p-2 shadow-[2px_2px_0_var(--color-ink)] flex items-center gap-2.5">
                         {item.artwork ? (
-                          <Image src={item.artwork} alt="" width={32} height={32} unoptimized className="rounded-lg border-[1.5px] border-ink/40 object-cover shrink-0" />
+                          <Image src={String(item.artwork)} alt="" width={32} height={32} unoptimized className="rounded-lg border-[1.5px] border-ink/40 object-cover shrink-0" />
                         ) : (
                           <div className="w-8 h-8 rounded-lg bg-coral/20 flex items-center justify-center text-[10px] font-bold font-mono border-[1.5px] border-ink/20 shrink-0">{idx + 1}</div>
                         )}
                         <div className="flex-1 overflow-hidden">
-                          <div className="text-[11px] font-mono font-bold truncate">{item.title}</div>
-                          {item.artist && <div className="text-[9px] font-mono text-ink-soft truncate">{item.artist}</div>}
+                          <div className="text-[11px] font-mono font-bold truncate">{String(item.title)}</div>
+                          {item.artist && <div className="text-[9px] font-mono text-ink-soft truncate">{String(item.artist)}</div>}
                         </div>
                       </div>
                     ))}
@@ -319,13 +381,14 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
-                  {messages.map((msg) => {
+                  {messages.map((msg, idx) => {
                     const isMe = msg.user_id === user.id;
+                    const userEmailDisplay = (msg.user_email && typeof msg.user_email === 'string') ? msg.user_email.split('@')[0] : 'Anonymous';
                     return (
-                      <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
-                        <span className="text-[9px] font-mono text-ink-soft/60 mb-0.5 px-1">{msg.user_email.split('@')[0]}</span>
+                      <div key={(msg.id ?? idx) as React.Key} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
+                        <span className="text-[9px] font-mono text-ink-soft/60 mb-0.5 px-1">{userEmailDisplay}</span>
                         <div className={`px-3 py-2 rounded-xl text-xs font-mono shadow-[2px_2px_0_var(--color-ink)] border-[1.5px] border-ink break-words ${isMe ? 'bg-teal-2 text-ink rounded-tr-sm' : 'bg-paper text-ink rounded-tl-sm'}`}>
-                          {msg.content}
+                          {String(msg.content)}
                         </div>
                       </div>
                     );
@@ -349,9 +412,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
                 <h3 className="font-pixel text-lg text-ink mb-2">Backgrounds</h3>
                 <p className="text-[10px] font-mono text-ink-soft mb-3 leading-relaxed">Upload GIFs or videos. (Max 5)</p>
-                {room.background_urls?.length > 0 && (
+                {bgCount > 0 && (
                   <div className="grid grid-cols-5 gap-2 mb-4">
-                    {room.background_urls.map((url: string, idx: number) => (
+                    {Array.isArray(room.background_urls) && room.background_urls.map((url: string, idx: number) => (
                       <div key={idx} className="relative aspect-square rounded-md overflow-hidden border-[1.5px] border-ink shadow-[1px_1px_0_var(--color-ink)] bg-ink/10 group">
                         {url.endsWith('.mp4') || url.endsWith('.webm') ? (
                           <video src={url} className="w-full h-full object-cover" muted loop playsInline />
@@ -366,7 +429,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                         </button>
                       </div>
                     ))}
-                    {Array.from({ length: Math.max(0, 5 - room.background_urls.length) }).map((_, idx) => (
+                    {Array.from({ length: Math.max(0, 5 - bgCount) }).map((_, idx) => (
                       <div key={`e-${idx}`} className="aspect-square rounded-md border-[1.5px] border-ink/30 border-dashed bg-paper/30 flex items-center justify-center">
                         <span className="text-[10px] font-mono opacity-30">+</span>
                       </div>
@@ -374,9 +437,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                   </div>
                 )}
                 <button onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || (room.background_urls?.length >= 5)}
+                  disabled={isUploading || (bgCount >= 5)}
                   className="w-full bg-paper border-2 border-ink rounded-lg py-2 text-xs font-bold font-mono shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] disabled:opacity-50">
-                  {isUploading ? 'Uploading...' : room.background_urls?.length >= 5 ? 'Max Reached' : 'Upload Backgrounds'}
+                  {isUploading ? 'Uploading...' : bgCount >= 5 ? 'Max Reached' : 'Upload Backgrounds'}
                 </button>
                 <input type="file" ref={fileInputRef} onChange={handleBackgroundUpload} accept="image/*,video/mp4,video/webm" multiple className="hidden" />
               </div>
