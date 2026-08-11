@@ -87,11 +87,57 @@ export async function updateRoomBackgrounds(roomId: string, background_urls: str
   return { success: true }
 }
 
-export async function addToQueue(roomId: string, videoUrl: string) {
+export async function addToQueue(
+  roomId: string,
+  song: {
+    videoId: string;
+    title: string;
+    artist: string;
+    artwork: string;
+    duration: number;
+  }
+) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+
+  // Insert into queue with rich metadata
+  const { error: insertError } = await supabase
+    .from('queue')
+    .insert({
+      room_id: roomId,
+      video_url: `https://www.youtube.com/watch?v=${song.videoId}`,
+      video_id: song.videoId,
+      title: song.title,
+      artist: song.artist,
+      artwork: song.artwork,
+      duration_ms: song.duration,
+      added_by: user.id
+    });
+
+  if (insertError) return { error: insertError.message }
+
+  // If room is currently silent, trigger playNextSong automatically!
+  const { data: room } = await supabase.from('rooms').select('current_song_url, is_playing').eq('id', roomId).single();
+  
+  if (room && (!room.current_song_url || !room.is_playing)) {
+     await playNextSong(roomId);
+  }
+
+  return { success: true }
+}
+
+// Legacy support: add a raw YouTube URL to the queue (fallback)
+export async function addUrlToQueue(roomId: string, videoUrl: string) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  // Extract video ID from URL
+  const videoIdMatch = videoUrl.match(/(?:youtu\.be\/|v=)([^&\s]+)/);
+  const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
   // Fetch YouTube title using oEmbed
   let title = "Unknown Song";
@@ -111,6 +157,7 @@ export async function addToQueue(roomId: string, videoUrl: string) {
     .insert({
       room_id: roomId,
       video_url: videoUrl,
+      video_id: videoId,
       title: title,
       added_by: user.id
     });
@@ -132,10 +179,6 @@ export async function playNextSong(roomId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  // Must be host
-  const { data: room } = await supabase.from('rooms').select('created_by').eq('id', roomId).single()
-  if (!room || room.created_by !== user.id) return { error: 'Only host can skip songs' }
-
   // Get oldest item in queue
   const { data: nextSong, error: qError } = await supabase
     .from('queue')
@@ -149,7 +192,10 @@ export async function playNextSong(roomId: string) {
     // Queue is empty, stop playing
     await supabase.from('rooms').update({
       current_song_url: null,
+      current_song_video_id: null,
       current_song_title: null,
+      current_song_artist: null,
+      current_song_artwork: null,
       is_playing: false
     }).eq('id', roomId);
     return { success: true, message: 'Queue empty' };
@@ -161,12 +207,32 @@ export async function playNextSong(roomId: string) {
   // Set as playing in room
   await supabase.from('rooms').update({
     current_song_url: nextSong.video_url,
+    current_song_video_id: nextSong.video_id || null,
     current_song_title: nextSong.title,
+    current_song_artist: nextSong.artist || null,
+    current_song_artwork: nextSong.artwork || null,
     current_song_started_at: new Date().toISOString(),
     is_playing: true
   }).eq('id', roomId);
 
   return { success: true };
+}
+
+export async function togglePlayPause(roomId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  // Must be host
+  const { data: room } = await supabase.from('rooms').select('created_by, is_playing').eq('id', roomId).single()
+  if (!room || room.created_by !== user.id) return { error: 'Only host can control playback' }
+
+  const { error } = await supabase.from('rooms').update({
+    is_playing: !room.is_playing
+  }).eq('id', roomId)
+
+  if (error) return { error: error.message }
+  return { success: true, is_playing: !room.is_playing }
 }
 
 export async function sendMessage(roomId: string, content: string, messageId?: string) {
