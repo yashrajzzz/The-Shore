@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     // Return only the fields we need to minimize payload
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = data.results.map((item: any) => ({
       trackId: item.trackId,
       trackName: item.trackName,
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ resultCount: data.resultCount, results });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('iTunes API error:', error);
     return NextResponse.json({ error: 'Failed to fetch from iTunes' }, { status: 502 });
   }

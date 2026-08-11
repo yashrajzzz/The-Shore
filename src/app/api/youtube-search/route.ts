@@ -17,7 +17,7 @@ async function getInstances(): Promise<string[]> {
     if (res.ok) {
       const data = await res.json();
       const apis = data
-        .map((i: any) => i.api_url)
+        .map((i: unknown) => ((i as Record<string, unknown>)['api_url'] as string))
         .filter((url: string) => url && url.startsWith('https://'));
       if (apis.length > 0) {
         cachedInstances = apis;
@@ -36,7 +36,7 @@ async function getInstances(): Promise<string[]> {
   ];
 }
 
-async function searchWithInstance(instanceUrl: string, query: string): Promise<any> {
+async function searchWithInstance(instanceUrl: string, query: string): Promise<unknown> {
   const url = `${instanceUrl}/search?q=${encodeURIComponent(query)}&filter=music_songs`;
   const response = await fetch(url, {
     signal: AbortSignal.timeout(8000),
@@ -62,23 +62,25 @@ export async function GET(request: NextRequest) {
   // Try each instance until one works
   for (const instance of instances) {
     try {
-      const data = await searchWithInstance(instance, query);
-      const items = data.items || [];
-
+      const data = await searchWithInstance(instance, query) as { items?: unknown[] };
+      const items = data?.items || [];
+ 
       // Extract video IDs from results
       const results = items
         .slice(0, 3)
-        .map((item: any) => {
-          const urlMatch = item.url?.match(/\/watch\?v=([^&]+)/);
+        .map((item: unknown) => {
+          const it = item as Record<string, unknown>;
+          const url = it['url'] as string | undefined;
+          const urlMatch = url?.match(/\/watch\?v=([^&]+)/);
           return {
             videoId: urlMatch ? urlMatch[1] : null,
-            title: item.title,
-            duration: item.duration,
-            uploaderName: item.uploaderName,
-            thumbnail: item.thumbnail,
+            title: it['title'],
+            duration: it['duration'],
+            uploaderName: it['uploaderName'],
+            thumbnail: it['thumbnail'],
           };
         })
-        .filter((item: any) => item.videoId);
+        .filter((item) => ((item as { videoId?: string | null }).videoId));
 
       if (results.length > 0) {
         return NextResponse.json({ results });

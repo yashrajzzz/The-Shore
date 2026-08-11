@@ -9,6 +9,7 @@ import { SongSearch } from '@/components/ui/SongSearch';
 import Image from 'next/image';
 import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function RoomClient({ room: initialRoom, user }: { room: any, user: any }) {
   const [activeTab, setActiveTab] = useState('listeners');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -22,11 +23,11 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
 
   // Sync State
   const [room, setRoom] = useState(initialRoom);
-  const [listeners, setListeners] = useState<any[]>([]);
-  const [queue, setQueue] = useState<any[]>([]);
+  const [listeners, setListeners] = useState<Record<string, unknown>[]>([]);
+  const [queue, setQueue] = useState<Record<string, unknown>[]>([]);
 
   // Chat State
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Record<string, unknown>[]>([]);
   const [chatInput, setChatInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -58,14 +59,17 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
 
     const roomSub = supabase
       .channel('schema-db-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, (payload) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, (payload: any) => {
         setRoom(payload.new);
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue', filter: `room_id=eq.${room.id}` }, () => {
         supabase.from('queue').select('*').eq('room_id', room.id).order('created_at', { ascending: true })
           .then(({ data }) => { if (data) setQueue(data); });
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${room.id}` }, (payload) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${room.id}` }, (payload: any) => {
         setMessages(prev => {
           if (prev.some(m => m.id === payload.new.id)) return prev;
           return [...prev, payload.new];
@@ -121,7 +125,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
   };
 
   const handleDeleteBackground = async (idx: number) => {
-    const newUrls = (room.background_urls || []).filter((_: any, i: number) => i !== idx);
+    const newUrls = (room.background_urls || []).filter((_: unknown, i: number) => i !== idx);
     setRoom({ ...room, background_urls: newUrls });
     setGlobalBackground(newUrls, timerInterval);
     await updateRoomBackgrounds(room.id, newUrls);

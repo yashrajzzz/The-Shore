@@ -131,8 +131,8 @@ export function SongSearch({ onAddToQueue }: SongSearchProps) {
         artwork: track.artworkUrl100,
         duration: track.trackTimeMillis,
       });
-    } catch (err: any) {
-      setError(err.message || 'Failed to add song');
+    } catch (err: unknown) {
+      setError((err as Error)?.message || 'Failed to add song');
     } finally {
       setAddingTrackId(null);
     }
