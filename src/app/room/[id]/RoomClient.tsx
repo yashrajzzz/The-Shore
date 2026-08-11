@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 import { SongSearch } from '@/components/ui/SongSearch';
+import Image from 'next/image';
 import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
 
 export default function RoomClient({ room: initialRoom, user }: { room: any, user: any }) {
@@ -173,7 +174,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
         {room.current_song_title ? (
           <div className="text-center bg-ink/20 backdrop-blur-sm border-2 border-ink/30 px-6 py-4 rounded-2xl drop-shadow-md">
             {room.current_song_artwork && (
-              <img src={room.current_song_artwork} alt="" className="w-20 h-20 rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg" />
+            <Image src={room.current_song_artwork} alt="" width={80} height={80} unoptimized className="rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg object-cover" />
             )}
             <div className="text-[10px] text-paper uppercase tracking-widest font-mono font-bold mb-2">now playing</div>
             <div className="font-pixel text-4xl leading-snug text-paper max-w-2xl">{room.current_song_title}</div>
@@ -201,7 +202,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
         <div className="bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-full px-6 py-3 shadow-[6px_6px_0_var(--color-ink)] flex items-center gap-6">
           <div className="flex items-center gap-3">
             {room.current_song_artwork ? (
-              <img src={room.current_song_artwork} alt="" className="w-10 h-10 rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
+              <Image src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
             ) : (
               <div className="w-10 h-10 rounded-full border-[2.5px] border-ink bg-gradient-to-br from-coral to-teal-3 shrink-0 shadow-[2px_2px_0_var(--color-ink)]"></div>
             )}
@@ -289,7 +290,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                     {queue.map((item, idx) => (
                       <div key={item.id} className="bg-paper/50 border-[1.5px] border-ink/70 rounded-xl p-2 shadow-[2px_2px_0_var(--color-ink)] flex items-center gap-2.5">
                         {item.artwork ? (
-                          <img src={item.artwork} alt="" className="w-8 h-8 rounded-lg border-[1.5px] border-ink/40 object-cover shrink-0" />
+                          <Image src={item.artwork} alt="" width={32} height={32} unoptimized className="rounded-lg border-[1.5px] border-ink/40 object-cover shrink-0" />
                         ) : (
                           <div className="w-8 h-8 rounded-lg bg-coral/20 flex items-center justify-center text-[10px] font-bold font-mono border-[1.5px] border-ink/20 shrink-0">{idx + 1}</div>
                         )}
@@ -310,7 +311,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
               {messages.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-xs font-mono text-ink-soft/70 gap-2">
                   <div className="mb-2"><MessageSquare size={32} className="opacity-50" /></div>
-                  It's quiet here...
+                  It&apos;s quiet here...
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
@@ -351,7 +352,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: any, use
                         {url.endsWith('.mp4') || url.endsWith('.webm') ? (
                           <video src={url} className="w-full h-full object-cover" muted loop playsInline />
                         ) : (
-                          <img src={url} alt={`Background ${idx + 1}`} className="w-full h-full object-cover" />
+                          <div className="relative w-full h-full">
+                            <Image src={url} alt={`Background ${idx + 1}`} fill unoptimized className="object-cover" />
+                          </div>
                         )}
                         <button onClick={() => handleDeleteBackground(idx)}
                           className="absolute top-0 right-0 w-5 h-5 bg-coral border-b-[1.5px] border-l-[1.5px] border-ink flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

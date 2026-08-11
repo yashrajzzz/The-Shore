@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import Image from 'next/image';
 import { Search, Plus, Loader2, Music, X, Play, Pause } from 'lucide-react';
 
 interface iTunesResult {
@@ -193,9 +194,12 @@ export function SongSearch({ onAddToQueue }: SongSearchProps) {
                 onClick={() => handlePreview(track)}
                 className="relative w-10 h-10 rounded-lg overflow-hidden border-[1.5px] border-ink/50 shrink-0 group/art"
               >
-                <img
+                <Image
                   src={track.artworkUrl100}
                   alt={track.trackName}
+                  width={40}
+                  height={40}
+                  unoptimized
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-ink/0 group-hover/art:bg-ink/40 flex items-center justify-center transition-all">

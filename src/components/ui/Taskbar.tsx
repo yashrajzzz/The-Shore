@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export function Taskbar() {
   const [time, setTime] = useState<string>('');
@@ -24,8 +25,8 @@ export function Taskbar() {
     <div className="relative z-50 flex items-center justify-between px-[18px] py-[9px] bg-cream/40 backdrop-blur-md border-b-[2.5px] border-ink">
       <div className="flex items-center gap-5">
         <Link href="/" className="flex items-center gap-3">
-          <img src="/bunny-favicon.png" alt="Bunny Logo" className="w-12 h-12 object-contain" />
-          <img src="/the-shore-logo.png" alt="The Shore" className="h-10 object-contain" />
+          <Image src="/bunny-favicon.png" alt="Bunny Logo" width={48} height={48} className="object-contain" />
+          <Image src="/the-shore-logo.png" alt="The Shore" width={120} height={40} className="object-contain" />
         </Link>
         <div className="hidden sm:flex gap-4 text-[13px] text-ink-soft font-mono">
           <Link href="/lobby" className="hover:text-ink hover:underline font-bold text-ink">My Rooms</Link>
