@@ -8,7 +8,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    redirect(`/login?redirect=/room/${id}`);
   }
 
   const { data: room, error } = await supabase

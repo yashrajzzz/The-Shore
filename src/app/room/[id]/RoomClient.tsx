@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 import { SongSearch } from '@/components/ui/SongSearch';
+import { SongProgressBar } from '@/components/ui/SongProgressBar';
 import Image from 'next/image';
 import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
 import { InviteModal } from '@/components/ui/InviteModal';
@@ -176,7 +177,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   };
 
   const handleNextSong = async () => {
-    if (isHost && ytPlayerRef.current) {
+    if (ytPlayerRef.current) {
       try { ytPlayerRef.current.pauseVideo(); } catch {}
     }
     const res = await playNextSong(roomIdStr);
@@ -184,8 +185,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   };
 
   const handleTogglePlay = async () => {
-    // Optimistically toggle local player for host to avoid relying solely on DB round-trip
-    if (isHost && ytPlayerRef.current) {
+    // Optimistically toggle local player to avoid relying solely on DB round-trip
+    if (ytPlayerRef.current) {
       try {
         const state = ytPlayerRef.current.getPlayerState?.();
         if (state === 1) ytPlayerRef.current.pauseVideo();
@@ -199,7 +200,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     if (res?.error) alert(res.error);
   };
 
-  const handleYTEnd = useCallback(() => { if (room.created_by === userIdStr) playNextSong(roomIdStr); }, [roomIdStr, room.created_by, userIdStr]);
+  const handleYTEnd = useCallback(() => { playNextSong(roomIdStr); }, [roomIdStr]);
 
   const currentVideoId = room.current_song_video_id || (typeof room.current_song_url === 'string' ? (room.current_song_url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) : undefined) || null;
   const isHost = room.created_by === (user as AppUser).id;
@@ -261,37 +262,45 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Floating Player Bar */}
       <div className="p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
-        <div className="bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-full px-6 py-3 shadow-[6px_6px_0_var(--color-ink)] flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            {room.current_song_artwork ? (
-              <Image src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
-            ) : (
-              <div className="w-10 h-10 rounded-full border-[2.5px] border-ink bg-gradient-to-br from-coral to-teal-3 shrink-0 shadow-[2px_2px_0_var(--color-ink)]"></div>
-            )}
-            <div className="hidden sm:block">
-              <b className="block text-sm font-mono font-bold drop-shadow-sm leading-tight text-ink max-w-[150px] truncate">
-                {room.current_song_title || "Silence..."}
-              </b>
-              <span className="text-[10px] font-mono font-bold text-ink-soft/90 drop-shadow-sm">
-                {room.current_song_artist || "Room Radio"}
-              </span>
+        <div className="bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-6 py-3 shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center gap-2">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              {room.current_song_artwork ? (
+                <Image src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
+              ) : (
+                <div className="w-10 h-10 rounded-full border-[2.5px] border-ink bg-gradient-to-br from-coral to-teal-3 shrink-0 shadow-[2px_2px_0_var(--color-ink)]"></div>
+              )}
+              <div className="hidden sm:block">
+                <b className="block text-sm font-mono font-bold drop-shadow-sm leading-tight text-ink max-w-[150px] truncate">
+                  {room.current_song_title || "Silence..."}
+                </b>
+                <span className="text-[10px] font-mono font-bold text-ink-soft/90 drop-shadow-sm">
+                  {room.current_song_artist || "Room Radio"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] opacity-50 cursor-not-allowed">
+                <SkipBack size={16} />
+              </button>
+              <button onClick={handleTogglePlay}
+                className="w-12 h-12 rounded-full border-[2.5px] border-ink bg-yellow flex items-center justify-center hover:bg-yellow/80 shadow-[3px_3px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)]">
+                {room.is_playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
+              </button>
+              <button onClick={handleNextSong}
+                className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)]">
+                <SkipForward size={16} />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] opacity-50 cursor-not-allowed">
-              <SkipBack size={16} />
-            </button>
-            <button onClick={isHost ? handleTogglePlay : undefined}
-              disabled={!isHost}
-              className="w-12 h-12 rounded-full border-[2.5px] border-ink bg-yellow flex items-center justify-center hover:bg-yellow/80 shadow-[3px_3px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)] disabled:opacity-60">
-              {room.is_playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
-            </button>
-            <button onClick={handleNextSong} disabled={!isHost}
-              className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] disabled:opacity-50">
-              <SkipForward size={16} />
-            </button>
-          </div>
+          {/* Song Progress Visualizer */}
+          {currentVideoId && (
+            <div className="w-full max-w-[400px] px-1">
+              <SongProgressBar ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} isHost={isHost} />
+            </div>
+          )}
         </div>
       </div>
 

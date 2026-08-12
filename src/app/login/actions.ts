@@ -6,11 +6,13 @@ import { createClient } from '@/utils/supabase/server'
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
-  // type-casting here for convenience
-  // in practice, you should validate your inputs
   const data = {
     email: formData.get('email') as string,
     password: formData.get('password') as string,
+  }
+
+  if (!data.email || !data.password) {
+    return { error: 'Email and password are required' }
   }
 
   const { error } = await supabase.auth.signInWithPassword(data)
@@ -26,17 +28,28 @@ export async function login(formData: FormData) {
 export async function signup(formData: FormData) {
   const supabase = await createClient()
 
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
+  const email = formData.get('email') as string
+  const password = formData.get('password') as string
   const displayName = formData.get('display_name') as string
 
-  const { error } = await supabase.auth.signUp({
-    ...data,
+  if (!email || !password) {
+    return { error: 'Email and password are required' }
+  }
+
+  if (!displayName || displayName.trim().length === 0) {
+    return { error: 'Display name is required' }
+  }
+
+  if (password.length < 6) {
+    return { error: 'Password must be at least 6 characters' }
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
     options: {
       data: {
-        display_name: displayName,
+        display_name: displayName.trim(),
       }
     }
   })
@@ -45,6 +58,12 @@ export async function signup(formData: FormData) {
     return { error: error.message }
   }
 
+  // Check if email confirmation is required
+  // When auto-confirm is OFF, the user object exists but session is null
+  if (data?.user && !data?.session) {
+    return { error: null, needsConfirmation: true }
+  }
+
   revalidatePath('/', 'layout')
-  return { error: null }
+  return { error: null, needsConfirmation: false }
 }

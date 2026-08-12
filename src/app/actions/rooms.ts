@@ -179,6 +179,8 @@ export async function playNextSong(roomId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  // Any authenticated user can advance to the next song
+
   // Get oldest item in queue
   const { data: nextSong, error: qError } = await supabase
     .from('queue')
@@ -223,9 +225,9 @@ export async function togglePlayPause(roomId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  // Must be host
-  const { data: room } = await supabase.from('rooms').select('created_by, is_playing').eq('id', roomId).single()
-  if (!room || room.created_by !== user.id) return { error: 'Only host can control playback' }
+  // Any authenticated user in the room can toggle playback
+  const { data: room } = await supabase.from('rooms').select('is_playing').eq('id', roomId).single()
+  if (!room) return { error: 'Room not found' }
 
   const { error } = await supabase.from('rooms').update({
     is_playing: !room.is_playing
