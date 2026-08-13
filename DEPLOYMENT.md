@@ -17,6 +17,7 @@ Run these SQL files **in this exact order** in the Supabase SQL Editor:
 3. `02_itunes_migration.sql` — adds song metadata columns (artist/artwork/video_id/etc.)
 4. `03_realtime_fix.sql` — **required fix**: adds `rooms` and `queue` to the realtime publication (this was missing, and without it other listeners never see now-playing/queue updates live)
 5. `storage.sql` — creates the public `backgrounds` storage bucket for room background uploads
+6. `05_background_folders_migration.sql` — per-user background folders (`users/{uid}/`) with scoped upload/delete policies
 
 > Note: `schema.sql` uses the `pg_cron` extension. On Supabase's free tier this is usually available, but if the `CREATE EXTENSION pg_cron` line errors, enable "pg_cron" under Database → Extensions in the dashboard first, then re-run.
 

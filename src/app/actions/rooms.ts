@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds'
 
 export async function createRoom(formData: FormData) {
   const supabase = await createClient()
@@ -27,6 +28,10 @@ export async function createRoom(formData: FormData) {
 
   const name = formData.get('name') as string
   const background_urls = formData.getAll('background_urls') as string[]
+
+  if (background_urls.length > MAX_BACKGROUNDS_PER_FOLDER) {
+    return { error: `You can only set up to ${MAX_BACKGROUNDS_PER_FOLDER} backgrounds per room.` }
+  }
 
   if (!name || name.trim() === '') {
     return { error: 'Room name is required' }
@@ -70,6 +75,10 @@ export async function updateRoomBackgrounds(roomId: string, background_urls: str
 
   if (room.created_by !== user.id) {
     return { error: 'Only the host can update backgrounds' }
+  }
+
+  if (background_urls.length > MAX_BACKGROUNDS_PER_FOLDER) {
+    return { error: `You can only set up to ${MAX_BACKGROUNDS_PER_FOLDER} backgrounds per room.` }
   }
 
   const { error } = await supabase

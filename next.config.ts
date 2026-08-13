@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
       ]
     ) as unknown as RemotePattern[],
   },
+  experimental: {
+    serverActions: {
+      // Increase the Server Actions request body size limit from 1MB to 2MB.
+      // Adjust as necessary (number of bytes or strings like '3mb', '500kb' are supported).
+      bodySizeLimit: '2mb',
+    },
+  },
 };
 
 export default nextConfig;

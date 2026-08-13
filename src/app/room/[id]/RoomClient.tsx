@@ -5,6 +5,8 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom } from '@/app/actions/rooms';
 import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
+import { BackgroundPicker } from '@/components/ui/BackgroundPicker';
+import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 import { SongSearch } from '@/components/ui/SongSearch';
 import { SongProgressBar } from '@/components/ui/SongProgressBar';
@@ -48,8 +50,6 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
   // Settings State
   const [timerInterval, setTimerInterval] = useState(30000);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync State
   const [room, setRoom] = useState(initialRoom);
@@ -211,33 +211,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     if (Array.isArray(room.background_urls)) setGlobalBackground(room.background_urls as string[], v);
   };
 
-  const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const currentUrls = room.background_urls || [];
-    const remainingSlots = 5 - currentUrls.length;
-    if (remainingSlots <= 0) { alert("You already have 5 backgrounds."); return; }
-    const files = Array.from(e.target.files).slice(0, remainingSlots);
-    setIsUploading(true);
-    const supabase = createClient();
-    const uploadedUrls: string[] = [];
-    for (const file of files) {
-      const filePath = `rooms/${Math.random()}.${file.name.split('.').pop()}`;
-      const { error: uploadError } = await supabase.storage.from('backgrounds').upload(filePath, file);
-      if (!uploadError) uploadedUrls.push(supabase.storage.from('backgrounds').getPublicUrl(filePath).data.publicUrl);
-    }
-    if (uploadedUrls.length > 0) {
-      const newUrls = [...currentUrls, ...uploadedUrls];
-      await updateRoomBackgrounds(roomIdStr, newUrls);
-      setGlobalBackground(newUrls, timerInterval);
-    }
-    setIsUploading(false);
-  };
-
-  const handleDeleteBackground = async (idx: number) => {
-    const newUrls = (room.background_urls || []).filter((_: unknown, i: number) => i !== idx);
-    setRoom({ ...room, background_urls: newUrls });
-    setGlobalBackground(newUrls, timerInterval);
-    await updateRoomBackgrounds(roomIdStr, newUrls);
+  const handleBackgroundSelectionChange = async (urls: string[]) => {
+    setRoom({ ...room, background_urls: urls });
+    setGlobalBackground(urls, timerInterval);
+    await updateRoomBackgrounds(roomIdStr, urls);
   };
 
   const handleAddToQueue = useCallback(async (song: { videoId: string; title: string; artist: string; artwork: string; duration: number }) => {
@@ -395,8 +372,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             <div className="bg-paper/40 backdrop-blur-xl border-2 border-ink p-8 rounded-2xl shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center max-w-sm text-center">
               <div className="mb-4"><ImageIcon size={48} className="text-ink/80" /></div>
               <h3 className="font-pixel text-xl text-ink mb-2">Set the Vibe!</h3>
-              <p className="text-xs font-mono text-ink-soft mb-6">Upload a beautiful GIF or image for the background.</p>
-              <button onClick={() => fileInputRef.current?.click()}
+              <p className="text-xs font-mono text-ink-soft mb-6">Pick a background from defaults or your library in Settings.</p>
+              <button onClick={() => { setIsSidebarOpen(true); setActiveTab('settings'); }}
                 className="bg-coral border-2 border-ink rounded-lg px-6 py-3 text-sm font-bold font-mono shadow-[3px_3px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)] transition-all flex items-center gap-2">
                 <Plus size={16} /> Add Background
               </button>
@@ -585,37 +562,20 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             <div className="flex flex-col gap-6">
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
                 <h3 className="font-pixel text-lg text-ink mb-2">Backgrounds</h3>
-                <p className="text-[10px] font-mono text-ink-soft mb-3 leading-relaxed">Upload GIFs or videos. (Max 5)</p>
-                {bgCount > 0 && (
-                  <div className="grid grid-cols-5 gap-2 mb-4">
-                    {Array.isArray(room.background_urls) && room.background_urls.map((url: string, idx: number) => (
-                      <div key={idx} className="relative aspect-square rounded-md overflow-hidden border-[1.5px] border-ink shadow-[1px_1px_0_var(--color-ink)] bg-ink/10 group">
-                        {url.endsWith('.mp4') || url.endsWith('.webm') ? (
-                          <video src={url} className="w-full h-full object-cover" muted loop playsInline />
-                        ) : (
-                          <div className="relative w-full h-full">
-                            <Image src={url} alt={`Background ${idx + 1}`} fill unoptimized className="object-cover" />
-                          </div>
-                        )}
-                        <button onClick={() => handleDeleteBackground(idx)}
-                          className="absolute top-0 right-0 w-5 h-5 bg-coral border-b-[1.5px] border-l-[1.5px] border-ink flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <X size={12} strokeWidth={3} />
-                        </button>
-                      </div>
-                    ))}
-                    {Array.from({ length: Math.max(0, 5 - bgCount) }).map((_, idx) => (
-                      <div key={`e-${idx}`} className="aspect-square rounded-md border-[1.5px] border-ink/30 border-dashed bg-paper/30 flex items-center justify-center">
-                        <span className="text-[10px] font-mono opacity-30">+</span>
-                      </div>
-                    ))}
-                  </div>
+                <p className="text-[10px] font-mono text-ink-soft mb-3 leading-relaxed">
+                  Pick from defaults or your library. Max {MAX_BACKGROUNDS_PER_FOLDER} per folder.
+                </p>
+                {isHost ? (
+                  <BackgroundPicker
+                    selectedUrls={Array.isArray(room.background_urls) ? room.background_urls : []}
+                    onSelectionChange={handleBackgroundSelectionChange}
+                    maxSelection={MAX_BACKGROUNDS_PER_FOLDER}
+                    allowLibraryManagement
+                    compact
+                  />
+                ) : (
+                  <p className="text-xs font-mono text-ink-soft">Only the host can change room backgrounds.</p>
                 )}
-                <button onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || (bgCount >= 5)}
-                  className="w-full bg-paper border-2 border-ink rounded-lg py-2 text-xs font-bold font-mono shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] disabled:opacity-50">
-                  {isUploading ? 'Uploading...' : bgCount >= 5 ? 'Max Reached' : 'Upload Backgrounds'}
-                </button>
-                <input type="file" ref={fileInputRef} onChange={handleBackgroundUpload} accept="image/*,video/mp4,video/webm" multiple className="hidden" />
               </div>
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
                 <h3 className="font-pixel text-lg text-ink mb-2">Slideshow Speed</h3>
