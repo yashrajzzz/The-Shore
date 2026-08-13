@@ -78,9 +78,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   useEffect(() => {
     const supabase = createClient();
     supabase.from('queue').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: true })
-      .then(({ data }) => { if (data) setQueue(data); });
+      .then(({ data }: { data: QueueItem[] | null }) => { if (data) setQueue(data); });
     supabase.from('messages').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: false }).limit(50)
-      .then(({ data }) => { if (data) setMessages(data.reverse()); });
+      .then(({ data }: { data: Message[] | null }) => { if (data) setMessages(data.reverse()); });
 
     const roomSub = supabase
       .channel('schema-db-changes')
@@ -90,7 +90,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue', filter: `room_id=eq.${roomIdStr}` }, () => {
         supabase.from('queue').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: true })
-          .then(({ data }) => { if (data) setQueue(data); });
+          .then(({ data }: { data: QueueItem[] | null }) => { if (data) setQueue(data); });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdStr}` }, (payload: unknown) => {
         const p = payload as { new?: Record<string, unknown> };
@@ -114,7 +114,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           return {} as Listener;
         }));
       })
-      .subscribe(async (status) => {
+      .subscribe(async (status: string) => {
         if (status === 'SUBSCRIBED') {
           await roomChannel.track({ user_id: (user as { id?: string }).id, email: (user as { email?: string }).email, is_host: (room as { created_by?: string }).created_by === (user as { id?: string }).id, joined_at: new Date().toISOString() });
         }
