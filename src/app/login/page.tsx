@@ -83,7 +83,7 @@ function LoginForm() {
       <div className="relative z-10 w-full max-w-sm">
         <Window title="Authentication">
           <div className="p-8">
-            <h1 className="font-pixel text-2xl text-center mb-6">Enter The Shore 🌊</h1>
+            <h1 className="font-pixel text-2xl text-center mb-6">Enter The Shore</h1>
 
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               {!isLogin && (
