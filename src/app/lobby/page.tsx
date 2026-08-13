@@ -2,6 +2,7 @@ import { Window } from "@/components/ui/Window";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { CreateRoomModal } from "@/components/ui/CreateRoomModal";
+import { DeleteRoomButton } from "@/components/ui/DeleteRoomButton";
 import { ClosableWindow } from "@/components/ui/ClosableWindow";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
@@ -23,6 +24,7 @@ export default async function LobbyPage({
   const { data: rooms } = await supabase
     .from('rooms')
     .select('*')
+    .eq('created_by', user.id)
     .order('created_at', { ascending: false });
 
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0];
@@ -45,14 +47,17 @@ export default async function LobbyPage({
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {rooms && rooms.length > 0 ? rooms.map((room) => (
-                  <Link href={`/room/${room.id}`} key={room.id}>
-                    <div className="h-full bg-cream/80 backdrop-blur-sm border-2 border-ink rounded-xl p-4 shadow-[4px_4px_0_var(--color-ink)] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[5px_5px_0_var(--color-ink)] transition-all cursor-pointer">
+                  <Link href={`/room/${room.id}`} key={room.id} className="block relative group">
+                    <div className="h-full bg-cream/80 backdrop-blur-sm border-2 border-ink rounded-xl p-4 shadow-[4px_4px_0_var(--color-ink)] group-hover:-translate-y-1 group-hover:-translate-x-1 group-hover:shadow-[5px_5px_0_var(--color-ink)] transition-all cursor-pointer">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex gap-2">
                           <span className="w-3 h-3 rounded-full border-[1.5px] border-ink bg-teal-3 block" />
                           <span className="w-3 h-3 rounded-full border-[1.5px] border-ink bg-coral block" />
                         </div>
-                        <span className="text-[10px] bg-paper border border-ink px-2 py-0.5 rounded-full">Active</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] bg-paper border border-ink px-2 py-0.5 rounded-full">Active</span>
+                          <DeleteRoomButton roomId={room.id} />
+                        </div>
                       </div>
                       <h3 className="font-pixel text-xl mb-1">{room.name}</h3>
                       <p className="text-xs text-ink-soft line-clamp-1">

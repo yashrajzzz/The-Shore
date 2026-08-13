@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue } from '@/app/actions/rooms';
+import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom } from '@/app/actions/rooms';
 import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
@@ -130,6 +130,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           return [...prev, newMsg];
         });
       })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdStr}` }, () => {
+        alert("The host has left or the room was closed.");
+        router.push('/lobby');
+      })
       .subscribe();
 
     const roomChannel = supabase.channel(`room:${room.id}`, {
@@ -140,11 +144,18 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       .on('presence', { event: 'sync' }, () => {
         const state = roomChannel.presenceState();
         const s = state as Record<string, unknown>;
-        setListeners(Object.keys(s).map((key: string) => {
+        const currentListeners = Object.keys(s).map((key: string) => {
           const val = s[key];
           if (Array.isArray(val) && val.length > 0) return val[0] as unknown as Listener;
           return {} as Listener;
-        }));
+        });
+        
+        setListeners(currentListeners);
+
+        // If presence has loaded and there are people, but no host, destroy the room.
+        if (currentListeners.length > 0 && !currentListeners.some(l => l.is_host)) {
+           destroyRoom(roomIdStr);
+        }
       })
       .on('broadcast', { event: 'play_pause' }, (msg: unknown) => {
         const m = msg as { payload?: { is_playing?: boolean } };
@@ -154,9 +165,32 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         desiredPlayingRef.current = null;
         setRoom(prev => ({ ...prev, is_playing: m.payload!.is_playing }));
       })
+      .on('broadcast', { event: 'request_sync' }, () => {
+        // If we are the host, reply with our current playback position
+        if ((room as { created_by?: string }).created_by === (user as { id?: string }).id && ytPlayerRef.current) {
+          const currentTime = ytPlayerRef.current.getCurrentTime();
+          roomChannel.send({
+            type: 'broadcast',
+            event: 'sync_position',
+            payload: { time: currentTime, videoId: currentVideoId }
+          });
+        }
+      })
+      .on('broadcast', { event: 'sync_position' }, (msg: unknown) => {
+        const m = msg as { payload?: { time?: number, videoId?: string } };
+        // If we are a listener, sync to the host's position
+        if ((room as { created_by?: string }).created_by !== (user as { id?: string }).id && typeof m.payload?.time === 'number' && ytPlayerRef.current) {
+          ytPlayerRef.current.seekTo(m.payload.time);
+        }
+      })
       .subscribe(async (status: string) => {
         if (status === 'SUBSCRIBED') {
           await roomChannel.track({ user_id: (user as { id?: string }).id, email: (user as { email?: string }).email, is_host: (room as { created_by?: string }).created_by === (user as { id?: string }).id, joined_at: new Date().toISOString() });
+          
+          // Request sync from the host when we first join
+          if ((room as { created_by?: string }).created_by !== (user as { id?: string }).id) {
+            roomChannel.send({ type: 'broadcast', event: 'request_sync', payload: {} });
+          }
         }
       });
 
@@ -287,6 +321,31 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   }, [room.is_playing, sendPlayPause]);
 
   const handleYTEnd = useCallback(() => { playNextSong(roomIdStr); }, [roomIdStr]);
+
+  // Media Session API for hardware media keys
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: room.current_song_title || 'Room Radio',
+        artist: room.current_song_artist || 'Silence...',
+        artwork: room.current_song_artwork ? [
+          { src: room.current_song_artwork, sizes: '512x512', type: 'image/jpeg' }
+        ] : []
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (!room.is_playing) handleTogglePlay();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (room.is_playing) handleTogglePlay();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        handleNextSong();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', null);
+    }
+  }, [room.is_playing, room.current_song_title, room.current_song_artist, room.current_song_artwork, handleTogglePlay]);
+
 
   const currentVideoId = room.current_song_video_id || (typeof room.current_song_url === 'string' ? (room.current_song_url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) : undefined) || null;
   const isHost = room.created_by === (user as AppUser).id;
@@ -568,7 +627,12 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                 </div>
               </div>
               <div className="mt-auto pt-6 border-t-[2.5px] border-ink border-dashed">
-                <button onClick={() => router.push('/lobby')}
+                <button onClick={async () => {
+                    if (isHost) {
+                      await destroyRoom(roomIdStr);
+                    }
+                    router.push('/lobby');
+                  }}
                   className="w-full bg-coral border-2 border-ink rounded-xl py-3 text-sm font-bold font-mono shadow-[4px_4px_0_var(--color-ink)] hover:translate-y-0.5 hover:shadow-[2px_2px_0_var(--color-ink)] transition-all flex items-center justify-center gap-2 text-ink">
                   <LogOut size={16} /> Leave Room
                 </button>

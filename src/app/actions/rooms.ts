@@ -303,3 +303,19 @@ export async function sendMessage(roomId: string, content: string, messageId?: s
   if (error) return { error: error.message }
   return { success: true }
 }
+
+export async function destroyRoom(roomId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase
+    .from('rooms')
+    .delete()
+    .eq('id', roomId)
+
+  if (error) return { error: error.message }
+  
+  revalidatePath('/lobby')
+  return { success: true }
+}
