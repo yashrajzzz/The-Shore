@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import { Search, Plus, Loader2, Music, X, Play, Pause } from 'lucide-react';
+import type { YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 
 interface iTunesResult {
   trackId: number;
@@ -22,6 +23,8 @@ interface SongSearchProps {
     artwork: string;
     duration: number;
   }) => Promise<void>;
+  ytPlayerRef?: React.RefObject<YouTubePlayerHandle | null>;
+  isRoomPlaying?: boolean;
 }
 
 function formatDuration(ms: number): string {
@@ -31,7 +34,7 @@ function formatDuration(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function SongSearch({ onAddToQueue }: SongSearchProps) {
+export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<iTunesResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -41,16 +44,26 @@ export function SongSearch({ onAddToQueue }: SongSearchProps) {
   const [error, setError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isRoomPlayingRef = useRef(isRoomPlaying);
+  useEffect(() => { isRoomPlayingRef.current = isRoomPlaying; }, [isRoomPlaying]);
+
+  const resumeRoomPlayback = useCallback(() => {
+    if (isRoomPlayingRef.current) {
+      try { ytPlayerRef?.current?.playVideo(); } catch { /* ignore */ }
+    }
+  }, [ytPlayerRef]);
 
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
       if (audioRef.current) {
+        const wasPreviewing = !audioRef.current.paused;
         audioRef.current.pause();
         audioRef.current = null;
+        if (wasPreviewing) resumeRoomPlayback();
       }
     };
-  }, []);
+  }, [resumeRoomPlayback]);
 
   const searchItunes = useCallback(async (term: string) => {
     if (!term.trim()) {
@@ -89,8 +102,13 @@ export function SongSearch({ onAddToQueue }: SongSearchProps) {
       // Stop preview
       audioRef.current?.pause();
       setPreviewingTrackId(null);
+      resumeRoomPlayback();
       return;
     }
+
+    // Pause the room's playback locally so the preview clip and the room's
+    // song don't play over each other.
+    try { ytPlayerRef?.current?.pauseVideo(); } catch { /* ignore */ }
 
     // Play preview
     if (audioRef.current) {
@@ -99,7 +117,10 @@ export function SongSearch({ onAddToQueue }: SongSearchProps) {
     const audio = new Audio(track.previewUrl);
     audio.volume = 0.5;
     audio.play();
-    audio.onended = () => setPreviewingTrackId(null);
+    audio.onended = () => {
+      setPreviewingTrackId(null);
+      resumeRoomPlayback();
+    };
     audioRef.current = audio;
     setPreviewingTrackId(track.trackId);
   };

@@ -174,6 +174,29 @@ export async function addUrlToQueue(roomId: string, videoUrl: string) {
   return { success: true }
 }
 
+type QueueRow = {
+  id: string | number;
+  video_url: string;
+  video_id?: string | null;
+  title: string;
+  artist?: string | null;
+  artwork?: string | null;
+};
+
+async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string, song: QueueRow) {
+  await supabase.from('queue').delete().eq('id', song.id);
+
+  await supabase.from('rooms').update({
+    current_song_url: song.video_url,
+    current_song_video_id: song.video_id || null,
+    current_song_title: song.title,
+    current_song_artist: song.artist || null,
+    current_song_artwork: song.artwork || null,
+    current_song_started_at: new Date().toISOString(),
+    is_playing: true
+  }).eq('id', roomId);
+}
+
 export async function playNextSong(roomId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -203,38 +226,61 @@ export async function playNextSong(roomId: string) {
     return { success: true, message: 'Queue empty' };
   }
 
-  // Delete it from queue
-  await supabase.from('queue').delete().eq('id', nextSong.id);
-
-  // Set as playing in room
-  await supabase.from('rooms').update({
-    current_song_url: nextSong.video_url,
-    current_song_video_id: nextSong.video_id || null,
-    current_song_title: nextSong.title,
-    current_song_artist: nextSong.artist || null,
-    current_song_artwork: nextSong.artwork || null,
-    current_song_started_at: new Date().toISOString(),
-    is_playing: true
-  }).eq('id', roomId);
+  await setAsCurrentSong(supabase, roomId, nextSong);
 
   return { success: true };
 }
 
-export async function togglePlayPause(roomId: string) {
+export async function playSongNow(roomId: string, queueItemId: string | number) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  // Any authenticated user in the room can toggle playback
-  const { data: room } = await supabase.from('rooms').select('is_playing').eq('id', roomId).single()
-  if (!room) return { error: 'Room not found' }
+  // Any authenticated user in the room can pick the next song to play
+  const { data: song, error: qError } = await supabase
+    .from('queue')
+    .select('*')
+    .eq('id', queueItemId)
+    .eq('room_id', roomId)
+    .single();
 
+  if (qError || !song) return { error: 'Song not found in queue' }
+
+  await setAsCurrentSong(supabase, roomId, song);
+
+  return { success: true };
+}
+
+export async function removeFromQueue(roomId: string, queueItemId: string | number) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase
+    .from('queue')
+    .delete()
+    .eq('id', queueItemId)
+    .eq('room_id', roomId)
+
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function setPlayPause(roomId: string, isPlaying: boolean) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  // Any authenticated user in the room can toggle playback.
+  // Caller passes the desired state directly (derived from local room state,
+  // which is already kept in sync via realtime) so this is a single atomic
+  // write instead of a read-then-write race.
   const { error } = await supabase.from('rooms').update({
-    is_playing: !room.is_playing
+    is_playing: isPlaying
   }).eq('id', roomId)
 
   if (error) return { error: error.message }
-  return { success: true, is_playing: !room.is_playing }
+  return { success: true, is_playing: isPlaying }
 }
 
 export async function sendMessage(roomId: string, content: string, messageId?: string) {

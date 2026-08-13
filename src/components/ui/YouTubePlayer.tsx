@@ -20,6 +20,7 @@ export interface YouTubePlayerHandle {
   getCurrentTime: () => number;
   getDuration: () => number;
   getPlayerState: () => number;
+  resync: () => void;
 }
 
 interface YouTubePlayerProps {
@@ -68,6 +69,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     const playerRef = useRef<any>(null);
     const currentVideoIdRef = useRef<string | null>(null);
     const [isApiReady, setIsApiReady] = useState(false);
+    const playingRef = useRef(playing);
+    useEffect(() => { playingRef.current = playing; }, [playing]);
+    // Guards against seekTo() being ignored when called too early (before the
+    // player has actually started buffering) — see performSync below.
+    const hasSyncedPlaybackRef = useRef(false);
 
     // Expose imperative handle
     useImperativeHandle(ref, () => ({
@@ -77,6 +83,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       getCurrentTime: () => playerRef.current?.getCurrentTime?.() || 0,
       getDuration: () => playerRef.current?.getDuration?.() || 0,
       getPlayerState: () => playerRef.current?.getPlayerState?.() ?? -1,
+      resync: () => performSync(),
     }));
 
     // Load YouTube IFrame API
@@ -96,6 +103,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         // Only sync if within 2 hours and player supports seekTo
         if (typeof playerRef.current?.seekTo === 'function') {
           playerRef.current.seekTo(diffSeconds, true);
+          // YouTube's seekTo() unconditionally resumes playback even if the
+          // video was paused, so re-assert the intended state right after.
+          if (!playingRef.current) playerRef.current?.pauseVideo?.();
         }
       }
     }, [startedAt]);
@@ -122,6 +132,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       // Different video or first load - create or load new video
       if (playerRef.current) {
         currentVideoIdRef.current = videoId;
+        hasSyncedPlaybackRef.current = false;
         playerRef.current.loadVideoById(videoId);
         // If the room is currently playing, ensure the loaded video starts
         try {
@@ -142,6 +153,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       containerRef.current.appendChild(playerDiv);
 
       currentVideoIdRef.current = videoId;
+      hasSyncedPlaybackRef.current = false;
 
       playerRef.current = new window.YT.Player(playerDiv.id, {
         height: '1',
@@ -159,7 +171,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         },
         events: {
           onReady: (event: any) => {
-            // Sync position for late-joiners
+            // Best-effort sync position for late-joiners. YouTube can silently
+            // ignore seekTo() called this early (before any buffering has
+            // happened), so this is backed up by the onStateChange handler below.
             performSync();
 
             if (playing) {
@@ -173,12 +187,22 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
               getCurrentTime: () => event.target.getCurrentTime() || 0,
               getDuration: () => event.target.getDuration() || 0,
               getPlayerState: () => event.target.getPlayerState() ?? -1,
+              resync: () => performSync(),
             };
             onSyncReady?.(handle);
             onReady?.();
           },
           onStateChange: (event: any) => {
             onStateChange?.(event.data);
+
+            // First time this video actually starts playing (e.g. once a
+            // late-joiner's browser allows playback, or after an autoplay
+            // block is cleared by the "enable audio" gesture), re-run the
+            // sync — seekTo() reliably takes effect once playback has begun.
+            if (event.data === 1 && !hasSyncedPlaybackRef.current) {
+              hasSyncedPlaybackRef.current = true;
+              performSync();
+            }
 
             // YT.PlayerState.ENDED === 0
             if (event.data === 0) {

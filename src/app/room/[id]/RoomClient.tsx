@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { updateRoomBackgrounds, addToQueue, playNextSong, togglePlayPause, sendMessage } from '@/app/actions/rooms';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue } from '@/app/actions/rooms';
 import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
@@ -36,6 +37,14 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
   const ytPlayerRef = useRef<YouTubePlayerHandle>(null);
+  // Tracks the play/pause state the user last asked for, so rapid clicks
+  // coalesce into a single in-flight request instead of flooding the server,
+  // and so a realtime echo of an already-superseded state doesn't flicker the UI.
+  const desiredPlayingRef = useRef<boolean | null>(null);
+  const togglingPlayRef = useRef(false);
+  // Used to broadcast play/pause instantly to other listeners instead of
+  // waiting on the postgres_changes WAL round-trip, which can lag noticeably.
+  const roomChannelRef = useRef<RealtimeChannel | null>(null);
 
   // Settings State
   const [timerInterval, setTimerInterval] = useState(30000);
@@ -86,11 +95,31 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       .channel('schema-db-changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdStr}` }, (payload: unknown) => {
         const p = payload as { new?: Record<string, unknown> };
-        if (p.new) setRoom(p.new);
+        if (!p.new) return;
+        const incoming = { ...p.new };
+        if (desiredPlayingRef.current !== null) {
+          const matchesIntent = p.new.is_playing === desiredPlayingRef.current;
+          incoming.is_playing = desiredPlayingRef.current;
+          if (matchesIntent && !togglingPlayRef.current) desiredPlayingRef.current = null;
+        }
+        setRoom(incoming);
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue', filter: `room_id=eq.${roomIdStr}` }, () => {
-        supabase.from('queue').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: true })
-          .then(({ data }: { data: QueueItem[] | null }) => { if (data) setQueue(data); });
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'queue', filter: `room_id=eq.${roomIdStr}` }, (payload: unknown) => {
+        const p = payload as { new?: QueueItem };
+        if (!p.new) return;
+        const newItem = p.new;
+        setQueue(prev => {
+          if (prev.some(item => item.id === newItem.id)) return prev;
+          const next = [...prev, newItem];
+          next.sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
+          return next;
+        });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'queue', filter: `room_id=eq.${roomIdStr}` }, (payload: unknown) => {
+        const p = payload as { old?: QueueItem };
+        if (!p.old) return;
+        const removedId = p.old.id;
+        setQueue(prev => prev.filter(item => item.id !== removedId));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdStr}` }, (payload: unknown) => {
         const p = payload as { new?: Record<string, unknown> };
@@ -103,7 +132,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       })
       .subscribe();
 
-    const roomChannel = supabase.channel(`room:${room.id}`, { config: { presence: { key: (user as { id?: string }).id } } });
+    const roomChannel = supabase.channel(`room:${room.id}`, {
+      config: { presence: { key: (user as { id?: string }).id }, broadcast: { self: false } }
+    });
+    roomChannelRef.current = roomChannel;
     roomChannel
       .on('presence', { event: 'sync' }, () => {
         const state = roomChannel.presenceState();
@@ -114,13 +146,25 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           return {} as Listener;
         }));
       })
+      .on('broadcast', { event: 'play_pause' }, (msg: unknown) => {
+        const m = msg as { payload?: { is_playing?: boolean } };
+        if (typeof m.payload?.is_playing !== 'boolean') return;
+        // An external toggle just arrived — drop our own pending intent (if
+        // any) so it doesn't fight with this update.
+        desiredPlayingRef.current = null;
+        setRoom(prev => ({ ...prev, is_playing: m.payload!.is_playing }));
+      })
       .subscribe(async (status: string) => {
         if (status === 'SUBSCRIBED') {
           await roomChannel.track({ user_id: (user as { id?: string }).id, email: (user as { email?: string }).email, is_host: (room as { created_by?: string }).created_by === (user as { id?: string }).id, joined_at: new Date().toISOString() });
         }
       });
 
-    return () => { supabase.removeChannel(roomSub); supabase.removeChannel(roomChannel); };
+    return () => {
+      roomChannelRef.current = null;
+      supabase.removeChannel(roomSub);
+      supabase.removeChannel(roomChannel);
+    };
   }, [room.id, user.id, user.email, room.created_by]);
 
   useEffect(() => {
@@ -166,6 +210,16 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     await addToQueue(roomIdStr, song);
   }, [roomIdStr]);
 
+  const handleRemoveFromQueue = useCallback(async (queueItemId: string | number) => {
+    setQueue(prev => prev.filter(item => item.id !== queueItemId));
+    await removeFromQueue(roomIdStr, queueItemId);
+  }, [roomIdStr]);
+
+  const handlePlaySongNow = useCallback(async (queueItemId: string | number) => {
+    setQueue(prev => prev.filter(item => item.id !== queueItemId));
+    await playSongNow(roomIdStr, queueItemId);
+  }, [roomIdStr]);
+
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
     const content = chatInput.trim();
@@ -184,21 +238,53 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     if (res?.error) alert(res.error);
   };
 
-  const handleTogglePlay = async () => {
-    // Optimistically toggle local player to avoid relying solely on DB round-trip
-    if (ytPlayerRef.current) {
-      try {
-        const state = ytPlayerRef.current.getPlayerState?.();
-        if (state === 1) ytPlayerRef.current.pauseVideo();
-        else ytPlayerRef.current.playVideo();
-      } catch {
-        // ignore
-      }
-    }
+  const sendPlayPause = useCallback(async (initial: boolean): Promise<void> => {
+    togglingPlayRef.current = true;
+    let desired = initial;
 
-    const res = await togglePlayPause(roomIdStr);
-    if (res?.error) alert(res.error);
-  };
+    // Loop instead of one-request-per-click: if a newer click arrives while
+    // a request is in flight, send its value next instead of firing a
+    // separate overlapping request.
+    for (;;) {
+      // Broadcast immediately so other listeners update instantly instead of
+      // waiting on the DB write + postgres_changes WAL round-trip below,
+      // which can lag noticeably (hundreds of ms to a couple seconds).
+      roomChannelRef.current?.send({ type: 'broadcast', event: 'play_pause', payload: { is_playing: desired } });
+
+      const res = await setPlayPause(roomIdStr, desired);
+
+      if (res?.error) {
+        alert(res.error);
+        desiredPlayingRef.current = null;
+        togglingPlayRef.current = false;
+        setRoom(prev => ({ ...prev, is_playing: !desired }));
+        return;
+      }
+
+      if (desiredPlayingRef.current !== null && desiredPlayingRef.current !== desired) {
+        desired = desiredPlayingRef.current;
+        continue;
+      }
+
+      togglingPlayRef.current = false;
+      return;
+    }
+  }, [roomIdStr]);
+
+  const handleTogglePlay = useCallback(() => {
+    const desiredPlaying = !room.is_playing;
+
+    // Optimistically flip local room state so the icon and the player (which
+    // reacts to the `playing` prop) respond instantly instead of waiting on
+    // the realtime round-trip. The player itself is the single place that
+    // issues playVideo/pauseVideo commands, so we don't also call the ref
+    // here — doing both was a race that could leave the player fighting itself.
+    desiredPlayingRef.current = desiredPlaying;
+    setRoom(prev => ({ ...prev, is_playing: desiredPlaying }));
+
+    if (togglingPlayRef.current) return;
+    sendPlayPause(desiredPlaying);
+  }, [room.is_playing, sendPlayPause]);
 
   const handleYTEnd = useCallback(() => { playNextSong(roomIdStr); }, [roomIdStr]);
 
@@ -357,15 +443,28 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
           {activeTab === 'queue' && (
             <div className="flex-1 flex flex-col gap-4">
-              <SongSearch onAddToQueue={handleAddToQueue} />
+              <SongSearch onAddToQueue={handleAddToQueue} ytPlayerRef={ytPlayerRef} isRoomPlaying={Boolean(room.is_playing)} />
               {queue.length > 0 && (
                 <>
                   <div className="text-[9px] uppercase tracking-widest font-mono text-ink-soft/60 font-bold border-t-[1.5px] border-ink/20 pt-3">Up Next · {queue.length} songs</div>
                   <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
                     {queue.map((item, idx) => (
-                      <div key={(item.id ?? idx) as React.Key} className="bg-paper/50 border-[1.5px] border-ink/70 rounded-xl p-2 shadow-[2px_2px_0_var(--color-ink)] flex items-center gap-2.5">
+                      <div
+                        key={(item.id ?? idx) as React.Key}
+                        onClick={() => handlePlaySongNow(item.id as string | number)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handlePlaySongNow(item.id as string | number); }}
+                        className="group bg-paper/50 border-[1.5px] border-ink/70 rounded-xl p-2 shadow-[2px_2px_0_var(--color-ink)] flex items-center gap-2.5 cursor-pointer hover:bg-coral/5 transition-colors"
+                        title="Play now"
+                      >
                         {item.artwork ? (
-                          <Image src={String(item.artwork)} alt="" width={32} height={32} unoptimized className="rounded-lg border-[1.5px] border-ink/40 object-cover shrink-0" />
+                          <div className="relative w-8 h-8 shrink-0">
+                            <Image src={String(item.artwork)} alt="" width={32} height={32} unoptimized className="rounded-lg border-[1.5px] border-ink/40 object-cover w-full h-full" />
+                            <div className="absolute inset-0 rounded-lg bg-ink/0 group-hover:bg-ink/40 flex items-center justify-center transition-colors">
+                              <Play size={12} className="text-paper opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" />
+                            </div>
+                          </div>
                         ) : (
                           <div className="w-8 h-8 rounded-lg bg-coral/20 flex items-center justify-center text-[10px] font-bold font-mono border-[1.5px] border-ink/20 shrink-0">{idx + 1}</div>
                         )}
@@ -373,6 +472,13 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                           <div className="text-[11px] font-mono font-bold truncate">{String(item.title)}</div>
                           {item.artist && <div className="text-[9px] font-mono text-ink-soft truncate">{String(item.artist)}</div>}
                         </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveFromQueue(item.id as string | number); }}
+                          className="shrink-0 p-1 rounded-lg text-ink-soft/60 hover:text-coral hover:bg-coral/10 transition-colors"
+                          aria-label="Remove from queue"
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
                     ))}
                   </div>
