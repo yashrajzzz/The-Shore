@@ -25,6 +25,10 @@ interface SongSearchProps {
   }) => Promise<void>;
   ytPlayerRef?: React.RefObject<YouTubePlayerHandle | null>;
   isRoomPlaying?: boolean;
+  // Lets the parent know a private preview is active, so it can show that
+  // clearly on the main Now Playing UI and disable the shared play/pause
+  // control instead of letting it silently flip the real room state.
+  onPreviewStateChange?: (isPreviewing: boolean) => void;
 }
 
 function formatDuration(ms: number): string {
@@ -34,28 +38,62 @@ function formatDuration(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSearchProps) {
+export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying, onPreviewStateChange }: SongSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<iTunesResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [addingTrackId, setAddingTrackId] = useState<number | null>(null);
   const [previewingTrackId, setPreviewingTrackId] = useState<number | null>(null);
+  // 0-1 progress through the current preview clip, driving the ring around
+  // its artwork so it's unmistakably a private, time-limited preview rather
+  // than the room's actual Now Playing.
+  const [previewProgress, setPreviewProgress] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const progressRafRef = useRef<number | null>(null);
   const isRoomPlayingRef = useRef(isRoomPlaying);
   useEffect(() => { isRoomPlayingRef.current = isRoomPlaying; }, [isRoomPlaying]);
 
+  const stopProgressLoop = useCallback(() => {
+    if (progressRafRef.current !== null) {
+      cancelAnimationFrame(progressRafRef.current);
+      progressRafRef.current = null;
+    }
+    setPreviewProgress(0);
+  }, []);
+
+  const startProgressLoop = useCallback(() => {
+    const tick = () => {
+      const audio = audioRef.current;
+      if (!audio || audio.paused) return;
+      const duration = audio.duration || 30;
+      setPreviewProgress(Math.min(1, audio.currentTime / duration));
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+    progressRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
   const resumeRoomPlayback = useCallback(() => {
+    try { ytPlayerRef?.current?.unMute(); } catch { /* ignore */ }
     if (isRoomPlayingRef.current) {
       try { ytPlayerRef?.current?.playVideo(); } catch { /* ignore */ }
     }
   }, [ytPlayerRef]);
 
+  // Let the parent (main Now Playing UI, play/pause button) know whenever a
+  // private preview starts or stops, so it isn't left showing/acting as if
+  // the room's own song is playing while it's actually muted underneath.
+  useEffect(() => {
+    onPreviewStateChange?.(previewingTrackId !== null);
+  }, [previewingTrackId, onPreviewStateChange]);
+
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
+      stopProgressLoop();
+      onPreviewStateChange?.(false);
       if (audioRef.current) {
         const wasPreviewing = !audioRef.current.paused;
         audioRef.current.pause();
@@ -63,7 +101,7 @@ export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSea
         if (wasPreviewing) resumeRoomPlayback();
       }
     };
-  }, [resumeRoomPlayback]);
+  }, [resumeRoomPlayback, stopProgressLoop, onPreviewStateChange]);
 
   const searchItunes = useCallback(async (term: string) => {
     if (!term.trim()) {
@@ -101,23 +139,31 @@ export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSea
     if (previewingTrackId === track.trackId) {
       // Stop preview
       audioRef.current?.pause();
+      stopProgressLoop();
       setPreviewingTrackId(null);
       resumeRoomPlayback();
       return;
     }
 
-    // Pause the room's playback locally so the preview clip and the room's
-    // song don't play over each other.
+    // Pause AND mute the room's playback locally so the preview clip and the
+    // room's song can never be heard together. Muting is the real guarantee
+    // here — pauseVideo() is sent to the YouTube iframe asynchronously (it's
+    // cross-origin postMessage) so there can be a brief window where it's
+    // still audibly playing; mute() takes effect immediately.
+    try { ytPlayerRef?.current?.mute(); } catch { /* ignore */ }
     try { ytPlayerRef?.current?.pauseVideo(); } catch { /* ignore */ }
 
     // Play preview
     if (audioRef.current) {
       audioRef.current.pause();
     }
+    stopProgressLoop();
     const audio = new Audio(track.previewUrl);
     audio.volume = 0.5;
     audio.play();
+    audio.addEventListener('playing', startProgressLoop, { once: true });
     audio.onended = () => {
+      stopProgressLoop();
       setPreviewingTrackId(null);
       resumeRoomPlayback();
     };
@@ -209,34 +255,53 @@ export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSea
 
       {/* Results */}
       {!isSearching && results.length > 0 && (
-        <div className="flex flex-col gap-1.5 max-h-[320px] overflow-y-auto pr-1 song-search-scroll">
-          {results.map((track) => (
+        <>
+          <div className="text-[9px] font-mono text-ink-soft/60 px-0.5 -mb-1">
+            Tap artwork to preview privately (only you) · tap + to add to the room
+          </div>
+          <div className="flex flex-col gap-1.5 max-h-[320px] min-w-0 overflow-y-auto overflow-x-hidden pr-1 song-search-scroll">
+          {results.map((track) => {
+            const isPreviewing = previewingTrackId === track.trackId;
+            return (
             <div
               key={track.trackId}
-              className="flex items-center gap-2.5 bg-cream/60 border-[1.5px] border-ink/70 rounded-xl p-2 hover:bg-cream hover:border-ink transition-all group"
+              className={`flex items-center gap-2.5 border-[1.5px] rounded-xl p-2 transition-all group min-w-0 max-w-full ${isPreviewing ? 'bg-coral/10 border-coral' : 'bg-cream/60 border-ink/70 hover:bg-cream hover:border-ink'}`}
             >
               {/* Artwork + Preview */}
               <button
                 onClick={() => handlePreview(track)}
-                className="relative w-10 h-10 rounded-lg overflow-hidden border-[1.5px] border-ink/50 shrink-0 group/art"
+                title={isPreviewing ? 'Stop preview' : 'Preview 30s clip (only you can hear this)'}
+                className="relative w-10 h-10 shrink-0 group/art"
               >
-                <Image
-                  src={track.artworkUrl100}
-                  alt={track.trackName}
-                  width={40}
-                  height={40}
-                  unoptimized
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-ink/0 group-hover/art:bg-ink/40 flex items-center justify-center transition-all">
-                  {previewingTrackId === track.trackId ? (
-                    <Pause size={14} className="text-paper opacity-0 group-hover/art:opacity-100 fill-current" />
-                  ) : (
-                    <Play size={14} className="text-paper opacity-0 group-hover/art:opacity-100 fill-current ml-0.5" />
-                  )}
+                <div className="absolute inset-0 rounded-lg overflow-hidden border-[1.5px] border-ink/50">
+                  <Image
+                    src={track.artworkUrl100}
+                    alt={track.trackName}
+                    width={40}
+                    height={40}
+                    unoptimized
+                    className="w-full h-full object-cover"
+                  />
+                  <div className={`absolute inset-0 flex items-center justify-center transition-all ${isPreviewing ? 'bg-ink/50' : 'bg-ink/0 group-hover/art:bg-ink/40'}`}>
+                    {isPreviewing ? (
+                      <Pause size={14} className="text-paper fill-current" />
+                    ) : (
+                      <Play size={14} className="text-paper opacity-0 group-hover/art:opacity-100 fill-current ml-0.5" />
+                    )}
+                  </div>
                 </div>
-                {previewingTrackId === track.trackId && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-coral animate-pulse" />
+                {/* Ring fills over the 30s clip so it reads as a running preview timer, not the room's Now Playing */}
+                {isPreviewing && (
+                  <svg viewBox="0 0 40 40" className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] -rotate-90 pointer-events-none">
+                    <circle cx="20" cy="20" r="18.5" fill="none" stroke="var(--color-ink)" strokeOpacity="0.12" strokeWidth="2.5" />
+                    <circle
+                      cx="20" cy="20" r="18.5" fill="none" stroke="var(--color-coral)" strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 18.5}
+                      strokeDashoffset={2 * Math.PI * 18.5 * (1 - previewProgress)}
+                      style={{ transition: 'stroke-dashoffset 100ms linear' }}
+                    />
+                  </svg>
                 )}
               </button>
 
@@ -245,9 +310,15 @@ export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSea
                 <div className="text-[11px] font-mono font-bold truncate leading-tight">
                   {track.trackName}
                 </div>
-                <div className="text-[9px] font-mono text-ink-soft truncate leading-tight mt-0.5">
-                  {track.artistName} · {formatDuration(track.trackTimeMillis)}
-                </div>
+                {isPreviewing ? (
+                  <div className="text-[9px] font-mono text-coral font-bold truncate leading-tight mt-0.5 animate-pulse">
+                    Previewing privately… (won&apos;t play in room)
+                  </div>
+                ) : (
+                  <div className="text-[9px] font-mono text-ink-soft truncate leading-tight mt-0.5">
+                    {track.artistName} · {formatDuration(track.trackTimeMillis)}
+                  </div>
+                )}
               </div>
 
               {/* Add Button */}
@@ -263,8 +334,10 @@ export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying }: SongSea
                 )}
               </button>
             </div>
-          ))}
-        </div>
+            );
+          })}
+          </div>
+        </>
       )}
 
       {/* Empty State */}

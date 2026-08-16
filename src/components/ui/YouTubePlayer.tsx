@@ -16,6 +16,8 @@ declare global {
 export interface YouTubePlayerHandle {
   playVideo: () => void;
   pauseVideo: () => void;
+  mute: () => void;
+  unMute: () => void;
   seekTo: (seconds: number) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
@@ -79,6 +81,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     useImperativeHandle(ref, () => ({
       playVideo: () => playerRef.current?.playVideo?.(),
       pauseVideo: () => playerRef.current?.pauseVideo?.(),
+      mute: () => playerRef.current?.mute?.(),
+      unMute: () => playerRef.current?.unMute?.(),
       seekTo: (seconds: number) => playerRef.current?.seekTo?.(seconds, true),
       getCurrentTime: () => playerRef.current?.getCurrentTime?.() || 0,
       getDuration: () => playerRef.current?.getDuration?.() || 0,
@@ -109,6 +113,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         }
       }
     }, [startedAt]);
+
+    // The onReady/onStateChange handlers below are bound once, when the
+    // YT.Player is first constructed, and are reused for every subsequent
+    // track via loadVideoById(). Without this ref, they'd keep calling the
+    // performSync closure captured at creation time — permanently bound to
+    // the very first song's startedAt — instead of the current track's.
+    const performSyncRef = useRef(performSync);
+    useEffect(() => { performSyncRef.current = performSync; }, [performSync]);
 
     // Create/update player when API is ready and videoId changes
     useEffect(() => {
@@ -174,7 +186,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
             // Best-effort sync position for late-joiners. YouTube can silently
             // ignore seekTo() called this early (before any buffering has
             // happened), so this is backed up by the onStateChange handler below.
-            performSync();
+            performSyncRef.current();
 
             if (playing) {
               event.target.playVideo();
@@ -183,11 +195,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
             const handle: YouTubePlayerHandle = {
               playVideo: () => event.target.playVideo(),
               pauseVideo: () => event.target.pauseVideo(),
+              mute: () => event.target.mute(),
+              unMute: () => event.target.unMute(),
               seekTo: (s: number) => event.target.seekTo(s, true),
               getCurrentTime: () => event.target.getCurrentTime() || 0,
               getDuration: () => event.target.getDuration() || 0,
               getPlayerState: () => event.target.getPlayerState() ?? -1,
-              resync: () => performSync(),
+              resync: () => performSyncRef.current(),
             };
             onSyncReady?.(handle);
             onReady?.();
@@ -201,7 +215,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
             // sync — seekTo() reliably takes effect once playback has begun.
             if (event.data === 1 && !hasSyncedPlaybackRef.current) {
               hasSyncedPlaybackRef.current = true;
-              performSync();
+              performSyncRef.current();
             }
 
             // YT.PlayerState.ENDED === 0

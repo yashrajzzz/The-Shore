@@ -20,11 +20,11 @@ interface YouTubeResult {
 
 // Invidious instances with public API access — raced in parallel
 const INVIDIOUS_INSTANCES = [
-  'https://inv.bp.projectsegfau.lt',
-  'https://invidious.projectsegfau.lt',
+  'https://invidious.f5.si',
+  'https://yt.chocolatemoo53.com',
+  'https://invidious.tiekoetter.com',
   'https://invidious.nerdvpn.de',
   'https://inv.nadeko.net',
-  'https://iv.ggtyler.dev',
 ];
 
 /**

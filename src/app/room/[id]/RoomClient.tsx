@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom } from '@/app/actions/rooms';
+import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue } from '@/app/actions/rooms';
 import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
 import { BackgroundPicker } from '@/components/ui/BackgroundPicker';
@@ -14,6 +14,7 @@ import Image from 'next/image';
 import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
 import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
+import { QueueList } from '@/components/ui/QueueList';
 
 type Room = {
   id?: string;
@@ -26,6 +27,7 @@ type Room = {
   current_song_title?: string;
   current_song_artist?: string;
   current_song_artwork?: string;
+  current_queue_id?: string | number | null;
   [k: string]: unknown;
 };
 
@@ -33,10 +35,16 @@ type AppUser = { id?: string; email?: string };
 
 export default function RoomClient({ room: initialRoom, user }: { room: Room, user: AppUser }) {
   type Listener = { email?: string; is_host?: boolean; [k: string]: unknown };
-  type QueueItem = { id?: string | number; artwork?: string; title?: string; artist?: string; [k:string]: unknown };
+  type QueueItem = { id?: string | number; artwork?: string; title?: string; artist?: string; position?: number; [k:string]: unknown };
   type Message = { id?: string | number; user_id?: string; user_email?: string; content?: string; created_at?: string; [k:string]: unknown };
   const [activeTab, setActiveTab] = useState('listeners');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // True while a search-result preview clip is playing locally. The room's
+  // actual player is muted/paused underneath without touching shared
+  // `room.is_playing`, so the UI must be told explicitly — otherwise the
+  // Now Playing card and play/pause button keep showing/acting on the real
+  // room state while the room is actually silent for this listener.
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const router = useRouter();
   const ytPlayerRef = useRef<YouTubePlayerHandle>(null);
   // Tracks the play/pause state the user last asked for, so rapid clicks
@@ -86,7 +94,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   // Realtime subscriptions
   useEffect(() => {
     const supabase = createClient();
-    supabase.from('queue').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: true })
+    supabase.from('queue').select('*').eq('room_id', roomIdStr).order('position', { ascending: true })
       .then(({ data }: { data: QueueItem[] | null }) => { if (data) setQueue(data); });
     supabase.from('messages').select('*').eq('room_id', roomIdStr).order('created_at', { ascending: false }).limit(50)
       .then(({ data }: { data: Message[] | null }) => { if (data) setMessages(data.reverse()); });
@@ -111,7 +119,17 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         setQueue(prev => {
           if (prev.some(item => item.id === newItem.id)) return prev;
           const next = [...prev, newItem];
-          next.sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
+          next.sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
+          return next;
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'queue', filter: `room_id=eq.${roomIdStr}` }, (payload: unknown) => {
+        const p = payload as { new?: QueueItem };
+        if (!p.new) return;
+        const updated = p.new;
+        setQueue(prev => {
+          const next = prev.map(item => (item.id === updated.id ? { ...item, ...updated } : item));
+          next.sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
           return next;
         });
       })
@@ -227,8 +245,23 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   }, [roomIdStr]);
 
   const handlePlaySongNow = useCallback(async (queueItemId: string | number) => {
-    setQueue(prev => prev.filter(item => item.id !== queueItemId));
-    await playSongNow(roomIdStr, queueItemId);
+    const res = await playSongNow(roomIdStr, queueItemId);
+    if (res?.error) alert(res.error);
+  }, [roomIdStr]);
+
+  const handleReorderQueue = useCallback(async (orderedIds: (string | number)[]) => {
+    // Optimistically reflect the new order locally; realtime UPDATEs from
+    // the server write will just confirm the same order for other clients.
+    setQueue(prev => {
+      const byId = new Map(prev.map(item => [item.id, item]));
+      const reordered = orderedIds.map((id, idx) => {
+        const item = byId.get(id);
+        return item ? { ...item, position: idx + 1 } : item;
+      }).filter(Boolean) as QueueItem[];
+      return reordered;
+    });
+    const res = await reorderQueue(roomIdStr, orderedIds);
+    if (res?.error) alert(res.error);
   }, [roomIdStr]);
 
   const handleSendMessage = async () => {
@@ -283,6 +316,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   }, [roomIdStr]);
 
   const handleTogglePlay = useCallback(() => {
+    // While previewing, the room's player is muted/paused locally without
+    // touching shared state — don't let this (including hardware media
+    // keys, which bypass the disabled button) flip the real room state.
+    if (isPreviewing) return;
     const desiredPlaying = !room.is_playing;
 
     // Optimistically flip local room state so the icon and the player (which
@@ -295,7 +332,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
     if (togglingPlayRef.current) return;
     sendPlayPause(desiredPlaying);
-  }, [room.is_playing, sendPlayPause]);
+  }, [room.is_playing, sendPlayPause, isPreviewing]);
 
   const handleYTEnd = useCallback(() => { playNextSong(roomIdStr); }, [roomIdStr]);
 
@@ -361,8 +398,12 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             {room.current_song_artwork && (
             <Image src={room.current_song_artwork} alt="" width={80} height={80} unoptimized className="rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg object-cover" />
             )}
-            <div className="text-[10px] text-paper uppercase tracking-widest font-mono font-bold mb-2">now playing</div>
-            <div className="font-pixel text-4xl leading-snug text-paper max-w-2xl">{room.current_song_title}</div>
+            <div className="text-[10px] text-paper uppercase tracking-widest font-mono font-bold mb-2">
+              {isPreviewing ? (
+                <span className="text-coral">paused · previewing another song</span>
+              ) : 'now playing'}
+            </div>
+            <div className={`font-pixel text-4xl leading-snug max-w-2xl ${isPreviewing ? 'text-paper/40' : 'text-paper'}`}>{room.current_song_title}</div>
             {room.current_song_artist && (
               <div className="text-sm text-paper/70 font-mono mt-1">{room.current_song_artist}</div>
             )}
@@ -407,7 +448,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                 <SkipBack size={16} />
               </button>
               <button onClick={handleTogglePlay}
-                className="w-12 h-12 rounded-full border-[2.5px] border-ink bg-yellow flex items-center justify-center hover:bg-yellow/80 shadow-[3px_3px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)]">
+                disabled={isPreviewing}
+                title={isPreviewing ? 'Stop the preview to control room playback' : undefined}
+                className={`w-12 h-12 rounded-full border-[2.5px] border-ink bg-yellow flex items-center justify-center shadow-[3px_3px_0_var(--color-ink)] transition-transform ${isPreviewing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-yellow/80 hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)]'}`}>
                 {room.is_playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
               </button>
               <button onClick={handleNextSong}
@@ -431,7 +474,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Sidebar Panel */}
       <div style={{ width: sidebarWidth }}
-        className={`fixed top-0 right-0 bottom-0 bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
+        className={`fixed top-0 right-0 bottom-0 bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
         <div onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize'; }}
           className="absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
 
@@ -451,9 +494,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
           {activeTab === 'listeners' && (
-            <div className="grid gap-3">
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
               {listeners.map((listener, idx) => (
                 <div key={idx} className="flex items-center gap-3 border-2 border-ink rounded-xl p-3 bg-cream/80 shadow-[3px_3px_0_var(--color-ink)]">
                   <div className="w-10 h-10 rounded-full border-2 border-ink bg-coral flex items-center justify-center font-bold font-mono uppercase">
@@ -478,45 +521,22 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           )}
 
           {activeTab === 'queue' && (
-            <div className="flex-1 flex flex-col gap-4">
-              <SongSearch onAddToQueue={handleAddToQueue} ytPlayerRef={ytPlayerRef} isRoomPlaying={Boolean(room.is_playing)} />
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col p-4 gap-4">
+              <div className="shrink-0">
+                <SongSearch onAddToQueue={handleAddToQueue} ytPlayerRef={ytPlayerRef} isRoomPlaying={Boolean(room.is_playing)} onPreviewStateChange={setIsPreviewing} />
+              </div>
               {queue.length > 0 && (
                 <>
-                  <div className="text-[9px] uppercase tracking-widest font-mono text-ink-soft/60 font-bold border-t-[1.5px] border-ink/20 pt-3">Up Next · {queue.length} songs</div>
-                  <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
-                    {queue.map((item, idx) => (
-                      <div
-                        key={(item.id ?? idx) as React.Key}
-                        onClick={() => handlePlaySongNow(item.id as string | number)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handlePlaySongNow(item.id as string | number); }}
-                        className="group bg-paper/50 border-[1.5px] border-ink/70 rounded-xl p-2 shadow-[2px_2px_0_var(--color-ink)] flex items-center gap-2.5 cursor-pointer hover:bg-coral/5 transition-colors"
-                        title="Play now"
-                      >
-                        {item.artwork ? (
-                          <div className="relative w-8 h-8 shrink-0">
-                            <Image src={String(item.artwork)} alt="" width={32} height={32} unoptimized className="rounded-lg border-[1.5px] border-ink/40 object-cover w-full h-full" />
-                            <div className="absolute inset-0 rounded-lg bg-ink/0 group-hover:bg-ink/40 flex items-center justify-center transition-colors">
-                              <Play size={12} className="text-paper opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="w-8 h-8 rounded-lg bg-coral/20 flex items-center justify-center text-[10px] font-bold font-mono border-[1.5px] border-ink/20 shrink-0">{idx + 1}</div>
-                        )}
-                        <div className="flex-1 overflow-hidden">
-                          <div className="text-[11px] font-mono font-bold truncate">{String(item.title)}</div>
-                          {item.artist && <div className="text-[9px] font-mono text-ink-soft truncate">{String(item.artist)}</div>}
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleRemoveFromQueue(item.id as string | number); }}
-                          className="shrink-0 p-1 rounded-lg text-ink-soft/60 hover:text-coral hover:bg-coral/10 transition-colors"
-                          aria-label="Remove from queue"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
+                  <div className="shrink-0 text-[9px] uppercase tracking-widest font-mono text-ink-soft/60 font-bold border-t-[1.5px] border-ink/20 pt-3">Playlist · {queue.length} songs</div>
+                  <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pr-1">
+                    <QueueList
+                      queue={queue}
+                      currentQueueId={room.current_queue_id ?? undefined}
+                      isPlaying={Boolean(room.is_playing)}
+                      onPlay={handlePlaySongNow}
+                      onRemove={handleRemoveFromQueue}
+                      onReorder={handleReorderQueue}
+                    />
                   </div>
                 </>
               )}
@@ -524,7 +544,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           )}
 
           {activeTab === 'chat' && (
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden p-4">
               {messages.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-xs font-mono text-ink-soft/70 gap-2">
                   <div className="mb-2"><MessageSquare size={32} className="opacity-50" /></div>
@@ -559,7 +579,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           )}
 
           {activeTab === 'settings' && (
-            <div className="flex flex-col gap-6">
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
                 <h3 className="font-pixel text-lg text-ink mb-2">Backgrounds</h3>
                 <p className="text-[10px] font-mono text-ink-soft mb-3 leading-relaxed">

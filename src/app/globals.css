@@ -25,11 +25,16 @@
   --shadow-off: 5px;
 }
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   background-color: var(--color-cream);
   color: var(--color-ink);
   font-family: var(--font-mono);
-  overflow-x: hidden;
 }
 
 /* Base resets */

@@ -111,6 +111,8 @@ export async function addToQueue(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  const position = await nextQueuePosition(supabase, roomId)
+
   // Insert into queue with rich metadata
   const { error: insertError } = await supabase
     .from('queue')
@@ -122,7 +124,8 @@ export async function addToQueue(
       artist: song.artist,
       artwork: song.artwork,
       duration_ms: song.duration,
-      added_by: user.id
+      added_by: user.id,
+      position
     });
 
   if (insertError) return { error: insertError.message }
@@ -160,6 +163,8 @@ export async function addUrlToQueue(roomId: string, videoUrl: string) {
     console.error("Failed to fetch title", e);
   }
 
+  const position = await nextQueuePosition(supabase, roomId)
+
   // Insert into queue
   const { error: insertError } = await supabase
     .from('queue')
@@ -168,7 +173,8 @@ export async function addUrlToQueue(roomId: string, videoUrl: string) {
       video_url: videoUrl,
       video_id: videoId,
       title: title,
-      added_by: user.id
+      added_by: user.id,
+      position
     });
 
   if (insertError) return { error: insertError.message }
@@ -190,11 +196,26 @@ type QueueRow = {
   title: string;
   artist?: string | null;
   artwork?: string | null;
+  position?: number | null;
 };
 
-async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string, song: QueueRow) {
-  await supabase.from('queue').delete().eq('id', song.id);
+async function nextQueuePosition(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string): Promise<number> {
+  const { data } = await supabase
+    .from('queue')
+    .select('position')
+    .eq('room_id', roomId)
+    .order('position', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
+  return (data?.position ?? 0) + 1;
+}
+
+async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string, song: QueueRow) {
+  // Songs stay in the queue permanently (playlist-style) — we just point
+  // current_queue_id at whichever row is playing so playNextSong knows
+  // where to resume from, and so replaying an already-played song is just
+  // "point here again" rather than needing to re-insert it.
   await supabase.from('rooms').update({
     current_song_url: song.video_url,
     current_song_video_id: song.video_id || null,
@@ -202,6 +223,7 @@ async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient
     current_song_artist: song.artist || null,
     current_song_artwork: song.artwork || null,
     current_song_started_at: new Date().toISOString(),
+    current_queue_id: song.id,
     is_playing: true
   }).eq('id', roomId);
 }
@@ -213,29 +235,61 @@ export async function playNextSong(roomId: string) {
 
   // Any authenticated user can advance to the next song
 
-  // Get oldest item in queue
-  const { data: nextSong, error: qError } = await supabase
+  const { data: room } = await supabase
+    .from('rooms')
+    .select('current_queue_id')
+    .eq('id', roomId)
+    .single();
+
+  let currentPosition: number | null = null;
+  if (room?.current_queue_id) {
+    const { data: currentItem } = await supabase
+      .from('queue')
+      .select('position')
+      .eq('id', room.current_queue_id)
+      .maybeSingle();
+    currentPosition = currentItem?.position ?? null;
+  }
+
+  // Find the next item in queue order after the currently playing one
+  // (or the very first item, if nothing has played yet).
+  let query = supabase
     .from('queue')
     .select('*')
     .eq('room_id', roomId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .single();
+    .order('position', { ascending: true })
+    .limit(1);
+
+  if (currentPosition !== null) {
+    query = query.gt('position', currentPosition);
+  }
+
+  const { data: nextSong, error: qError } = await query.maybeSingle();
 
   if (qError || !nextSong) {
-    // Queue is empty, stop playing
-    await supabase.from('rooms').update({
-      current_song_url: null,
-      current_song_video_id: null,
-      current_song_title: null,
-      current_song_artist: null,
-      current_song_artwork: null,
-      is_playing: false
-    }).eq('id', roomId);
-    return { success: true, message: 'Queue empty' };
+    // Reached the end of the queue — stop playing but leave the last song
+    // and the queue itself in place, like a playlist that's finished.
+    await supabase.from('rooms').update({ is_playing: false }).eq('id', roomId);
+    return { success: true, message: 'End of queue' };
   }
 
   await setAsCurrentSong(supabase, roomId, nextSong);
+
+  return { success: true };
+}
+
+export async function reorderQueue(roomId: string, orderedIds: (string | number)[]) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const updates = orderedIds.map((id, index) =>
+    supabase.from('queue').update({ position: index + 1 }).eq('id', id).eq('room_id', roomId)
+  );
+
+  const results = await Promise.all(updates);
+  const failed = results.find(r => r.error);
+  if (failed?.error) return { error: failed.error.message };
 
   return { success: true };
 }

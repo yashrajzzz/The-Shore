@@ -38,7 +38,7 @@ export default function RootLayout({
       lang="en"
       className={`${spaceMono.variable} ${vt323.variable} ${pressStart.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col relative">
+      <body className="h-full flex flex-col relative overflow-hidden">
         <GlobalBackground />
         <AppLayoutWrapper>
           {children}
