@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Window } from './Window';
 import { Button } from './Button';
 import { Copy, Check, MessageCircle, Mail, X, Share2 } from 'lucide-react';
@@ -8,13 +8,8 @@ import { Copy, Check, MessageCircle, Mail, X, Share2 } from 'lucide-react';
 export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [canNativeShare, setCanNativeShare] = useState(false);
+  const [canNativeShare] = useState(() => typeof navigator !== 'undefined' && typeof navigator.share === 'function');
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  // Detect navigator.share client-side only to avoid SSR hydration mismatch
-  useEffect(() => {
-    setCanNativeShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
-  }, []);
 
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/room/${roomId}` : `/room/${roomId}`;
   const shareText = `Join me on The Shore${roomName ? ` in room '${roomName}'` : ''}! 🎵`;
@@ -129,4 +124,3 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
     </>
   );
 }
-
