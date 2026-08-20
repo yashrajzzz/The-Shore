@@ -130,6 +130,7 @@ export function SongSearch({ onAddToQueue, ytPlayerRef, isRoomPlaying, onPreview
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setQuery(value);
+    setError(''); // Clear any stale error from a previous add/search attempt
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => searchItunes(value), 400);

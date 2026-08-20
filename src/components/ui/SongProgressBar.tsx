@@ -6,8 +6,9 @@ import type { YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 interface SongProgressBarProps {
   ytPlayerRef: React.RefObject<YouTubePlayerHandle | null>;
   isPlaying: boolean;
-  isHost: boolean;
   compact?: boolean;
+  /** Called when the user finishes seeking — broadcasts the new position to room */
+  onSeek?: (seekTimeSeconds: number) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -17,7 +18,7 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function SongProgressBar({ ytPlayerRef, isPlaying, isHost, compact = false }: SongProgressBarProps) {
+export function SongProgressBar({ ytPlayerRef, isPlaying, compact = false, onSeek }: SongProgressBarProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
@@ -65,10 +66,9 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, isHost, compact = fals
   }, [duration]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!isHost) return;
     setIsSeeking(true);
     handleSeek(e.clientX);
-  }, [isHost, handleSeek]);
+  }, [handleSeek]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isSeeking) return;
@@ -81,10 +81,12 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, isHost, compact = fals
     try {
       ytPlayerRef.current?.seekTo?.(seekTime);
       setCurrentTime(seekTime);
+      // Broadcast the seek to other room participants
+      onSeek?.(seekTime);
     } catch {
       // ignore
     }
-  }, [isSeeking, seekTime, ytPlayerRef]);
+  }, [isSeeking, seekTime, ytPlayerRef, onSeek]);
 
   useEffect(() => {
     if (isSeeking) {
@@ -122,7 +124,7 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, isHost, compact = fals
       {/* Progress bar */}
       <div
         ref={barRef}
-        className={`relative flex-1 h-[6px] bg-ink/10 rounded-full overflow-hidden group ${isHost ? 'cursor-pointer' : 'cursor-default'}`}
+        className={`relative flex-1 h-[6px] bg-ink/10 rounded-full overflow-hidden group cursor-pointer`}
         onMouseDown={handleMouseDown}
       >
         {/* Track fill */}
@@ -134,16 +136,14 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, isHost, compact = fals
           }}
         />
 
-        {/* Scrubber handle (host only) */}
-        {isHost && (
-          <div
-            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-paper border-[2px] border-ink shadow-[1px_1px_0_var(--color-ink)] opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{
-              left: `calc(${progress}% - 6px)`,
-              transition: isSeeking ? 'none' : 'left 0.5s linear',
-            }}
-          />
-        )}
+        {/* Scrubber handle */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-paper border-[2px] border-ink shadow-[1px_1px_0_var(--color-ink)] opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{
+            left: `calc(${progress}% - 6px)`,
+            transition: isSeeking ? 'none' : 'left 0.5s linear',
+          }}
+        />
 
         {/* Animated glow at the progress point */}
         <div

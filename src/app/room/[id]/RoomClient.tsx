@@ -31,12 +31,12 @@ type Room = {
   [k: string]: unknown;
 };
 
-type AppUser = { id?: string; email?: string };
+type AppUser = { id?: string; email?: string; display_name?: string };
 
 export default function RoomClient({ room: initialRoom, user }: { room: Room, user: AppUser }) {
-  type Listener = { email?: string; is_host?: boolean; [k: string]: unknown };
+  type Listener = { email?: string; display_name?: string; is_host?: boolean; [k: string]: unknown };
   type QueueItem = { id?: string | number; artwork?: string; title?: string; artist?: string; position?: number; [k:string]: unknown };
-  type Message = { id?: string | number; user_id?: string; user_email?: string; content?: string; created_at?: string; [k:string]: unknown };
+  type Message = { id?: string | number; user_id?: string; user_email?: string; user_display_name?: string; content?: string; created_at?: string; [k:string]: unknown };
   const [activeTab, setActiveTab] = useState('listeners');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // True while a search-result preview clip is playing locally. The room's
@@ -64,6 +64,11 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   const roomIdStr = String((initialRoom && (initialRoom as Room).id) ?? (initialRoom as Room).id ?? '');
   const userIdStr = String((user && (user as AppUser).id) ?? '');
   const userEmailStr = String((user && (user as AppUser).email) ?? '');
+  const userDisplayName = (user as AppUser).display_name || userEmailStr.split('@')[0] || 'Anonymous';
+  // Stable ref for created_by — never changes for a given room, avoids
+  // putting room.created_by in the realtime useEffect dep array which would
+  // cause subscription churn on every room state update.
+  const createdByRef = useRef(initialRoom.created_by);
   const bgCount = Array.isArray(room.background_urls) ? room.background_urls.length : 0;
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -170,10 +175,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         
         setListeners(currentListeners);
 
-        // If presence has loaded and there are people, but no host, destroy the room.
-        if (currentListeners.length > 0 && !currentListeners.some(l => l.is_host)) {
-           destroyRoom(roomIdStr);
-        }
+        // NOTE: Removed automatic destroyRoom when host is briefly absent —
+        // a network blip would destroy the room for everyone. The host
+        // explicitly clicks "Leave Room" which calls destroyRoom instead.
       })
       .on('broadcast', { event: 'play_pause' }, (msg: unknown) => {
         const m = msg as { payload?: { is_playing?: boolean } };
@@ -185,7 +189,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       })
       .on('broadcast', { event: 'request_sync' }, () => {
         // If we are the host, reply with our current playback position
-        if ((room as { created_by?: string }).created_by === (user as { id?: string }).id && ytPlayerRef.current) {
+        if (createdByRef.current === userIdStr && ytPlayerRef.current) {
           const currentTime = ytPlayerRef.current.getCurrentTime();
           roomChannel.send({
             type: 'broadcast',
@@ -197,16 +201,16 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       .on('broadcast', { event: 'sync_position' }, (msg: unknown) => {
         const m = msg as { payload?: { time?: number, videoId?: string } };
         // If we are a listener, sync to the host's position
-        if ((room as { created_by?: string }).created_by !== (user as { id?: string }).id && typeof m.payload?.time === 'number' && ytPlayerRef.current) {
+        if (createdByRef.current !== userIdStr && typeof m.payload?.time === 'number' && ytPlayerRef.current) {
           ytPlayerRef.current.seekTo(m.payload.time);
         }
       })
       .subscribe(async (status: string) => {
         if (status === 'SUBSCRIBED') {
-          await roomChannel.track({ user_id: (user as { id?: string }).id, email: (user as { email?: string }).email, is_host: (room as { created_by?: string }).created_by === (user as { id?: string }).id, joined_at: new Date().toISOString() });
+          await roomChannel.track({ user_id: userIdStr, email: userEmailStr, display_name: userDisplayName, is_host: createdByRef.current === userIdStr, joined_at: new Date().toISOString() });
           
           // Request sync from the host when we first join
-          if ((room as { created_by?: string }).created_by !== (user as { id?: string }).id) {
+          if (createdByRef.current !== userIdStr) {
             roomChannel.send({ type: 'broadcast', event: 'request_sync', payload: {} });
           }
         }
@@ -217,7 +221,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       supabase.removeChannel(roomSub);
       supabase.removeChannel(roomChannel);
     };
-  }, [room.id, user.id, user.email, room.created_by]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomIdStr, userIdStr, userEmailStr]);
 
   useEffect(() => {
     if (Array.isArray(room.background_urls) && room.background_urls.length > 0) setGlobalBackground(room.background_urls as string[], timerInterval);
@@ -269,18 +274,41 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     const content = chatInput.trim();
     setChatInput('');
     const messageId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: messageId, room_id: roomIdStr, user_id: userIdStr, user_email: userEmailStr, content, created_at: new Date().toISOString() }]);
+    setMessages(prev => [...prev, { id: messageId, room_id: roomIdStr, user_id: userIdStr, user_email: userEmailStr, user_display_name: userDisplayName, content, created_at: new Date().toISOString() }]);
     const res = await sendMessage(roomIdStr, content, messageId);
     if (res?.error) { alert("Failed: " + res.error); setMessages(prev => prev.filter(m => m.id !== messageId)); }
   };
 
-  const handleNextSong = async () => {
+  const handleNextSong = useCallback(async () => {
+    // Immediately clear the current song state so:
+    // 1. performSync won't seek the new song using the old song's startedAt
+    // 2. The UI instantly reflects "loading next song" instead of showing stale info
     if (ytPlayerRef.current) {
       try { ytPlayerRef.current.pauseVideo(); } catch {}
     }
+    setRoom(prev => ({
+      ...prev,
+      current_song_started_at: null,
+      current_song_video_id: null,
+      current_song_title: undefined,
+      current_song_artist: undefined,
+      current_song_artwork: undefined,
+    }));
     const res = await playNextSong(roomIdStr);
     if (res?.error) alert(res.error);
-  };
+  }, [roomIdStr]);
+
+  // Handle seek broadcast: when a user seeks the progress bar, update
+  // current_song_started_at so all participants sync to the new position.
+  const handleSeek = useCallback(async (seekTimeSeconds: number) => {
+    // Compute a new started_at as if the song started `seekTimeSeconds` ago
+    const newStartedAt = new Date(Date.now() - seekTimeSeconds * 1000).toISOString();
+    // Optimistically update local state
+    setRoom(prev => ({ ...prev, current_song_started_at: newStartedAt }));
+    // Persist to DB so other participants pick it up via realtime
+    const supabase = (await import('@/utils/supabase/client')).createClient();
+    await supabase.from('rooms').update({ current_song_started_at: newStartedAt }).eq('id', roomIdStr);
+  }, [roomIdStr]);
 
   const sendPlayPause = useCallback(async (initial: boolean): Promise<void> => {
     togglingPlayRef.current = true;
@@ -463,7 +491,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           {/* Song Progress Visualizer */}
           {currentVideoId && (
             <div className="w-full max-w-[400px] px-1">
-              <SongProgressBar ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} isHost={isHost} />
+              <SongProgressBar ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} onSeek={handleSeek} />
             </div>
           )}
         </div>
@@ -500,10 +528,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
               {listeners.map((listener, idx) => (
                 <div key={idx} className="flex items-center gap-3 border-2 border-ink rounded-xl p-3 bg-cream/80 shadow-[3px_3px_0_var(--color-ink)]">
                   <div className="w-10 h-10 rounded-full border-2 border-ink bg-coral flex items-center justify-center font-bold font-mono uppercase">
-                    {listener.email?.[0] || '?'}
+                    {(listener.display_name || listener.email)?.[0]?.toUpperCase() || '?'}
                   </div>
                   <div className="overflow-hidden">
-                    <b className="text-xs block truncate font-mono">{(listener.email && typeof listener.email === 'string') ? listener.email.split('@')[0] : 'Anonymous'}</b>
+                    <b className="text-xs block truncate font-mono">{listener.display_name || ((listener.email && typeof listener.email === 'string') ? listener.email.split('@')[0] : 'Anonymous')}</b>
                     <span className="text-[10px] text-ink-soft font-mono">{listener.is_host ? 'Host' : 'Listener'}</span>
                   </div>
                 </div>
@@ -554,7 +582,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                 <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
                   {messages.map((msg, idx) => {
                     const isMe = msg.user_id === user.id;
-                    const userEmailDisplay = (msg.user_email && typeof msg.user_email === 'string') ? msg.user_email.split('@')[0] : 'Anonymous';
+                    // Resolve display name: optimistic local msg has it, otherwise look up from presence
+                    const presenceName = listeners.find(l => (l as Record<string, unknown>).user_id === msg.user_id)?.display_name;
+                    const userEmailDisplay = msg.user_display_name || presenceName || ((msg.user_email && typeof msg.user_email === 'string') ? msg.user_email.split('@')[0] : 'Anonymous');
                     return (
                       <div key={(msg.id ?? idx) as React.Key} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
                         <span className="text-[9px] font-mono text-ink-soft/60 mb-0.5 px-1">{userEmailDisplay}</span>

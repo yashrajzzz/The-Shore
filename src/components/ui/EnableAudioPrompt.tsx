@@ -1,18 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import type { YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 
 export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytPlayerRef: React.RefObject<YouTubePlayerHandle | null> }) {
   const storageKey = `shore_audio_enabled_${roomId}`;
 
-  const initialVisible = (() => {
-    if (typeof window === 'undefined') return false;
-    return !Boolean(window.sessionStorage.getItem(storageKey));
-  })();
+  // Start hidden to match SSR output; show on client if sessionStorage says so
+  const [visible, setVisible] = useState<boolean>(false);
 
-  const [visible, setVisible] = useState<boolean>(initialVisible);
+  useEffect(() => {
+    if (!window.sessionStorage.getItem(storageKey)) {
+      setVisible(true);
+    }
+  }, [storageKey]);
 
   const handleEnable = async () => {
     try {
@@ -43,3 +45,4 @@ export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytP
     </div>
   );
 }
+

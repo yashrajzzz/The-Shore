@@ -25,6 +25,6 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   await supabase.from('rooms').update({ last_active_at: new Date().toISOString() }).eq('id', room.id);
 
   return (
-    <RoomClient room={room} user={user} />
+    <RoomClient room={room} user={{ id: user.id, email: user.email, display_name: user.user_metadata?.display_name }} />
   );
 }

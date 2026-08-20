@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Window } from './Window';
 import { Button } from './Button';
 import { Copy, Check, MessageCircle, Mail, X, Share2 } from 'lucide-react';
@@ -8,7 +8,13 @@ import { Copy, Check, MessageCircle, Mail, X, Share2 } from 'lucide-react';
 export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [canNativeShare, setCanNativeShare] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Detect navigator.share client-side only to avoid SSR hydration mismatch
+  useEffect(() => {
+    setCanNativeShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
 
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/room/${roomId}` : `/room/${roomId}`;
   const shareText = `Join me on The Shore${roomName ? ` in room '${roomName}'` : ''}! 🎵`;
@@ -98,7 +104,7 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
                   </a>
 
                   {/* Native Share (mobile) */}
-                  {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                  {canNativeShare && (
                     <button
                       onClick={handleNativeShare}
                       className="flex items-center gap-1.5 bg-yellow border-[2px] border-ink rounded-lg px-3 py-2 text-xs font-mono font-bold shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] transition-all"
@@ -123,3 +129,4 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
     </>
   );
 }
+

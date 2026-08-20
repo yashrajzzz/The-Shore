@@ -77,6 +77,20 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     // player has actually started buffering) — see performSync below.
     const hasSyncedPlaybackRef = useRef(false);
 
+    // ---- Stable refs for event callbacks ----
+    // These are bound once when the YT.Player is constructed and reused for
+    // every subsequent track via loadVideoById(). Using refs means the latest
+    // callback is always called without the callbacks appearing in the main
+    // useEffect's dependency array (which would cause premature re-creation).
+    const onReadyRef = useRef(onReady);
+    useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+    const onEndRef = useRef(onEnd);
+    useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
+    const onStateChangeRef = useRef(onStateChange);
+    useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
+    const onSyncReadyRef = useRef(onSyncReady);
+    useEffect(() => { onSyncReadyRef.current = onSyncReady; }, [onSyncReady]);
+
     // Expose imperative handle
     useImperativeHandle(ref, () => ({
       playVideo: () => playerRef.current?.playVideo?.(),
@@ -123,6 +137,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     useEffect(() => { performSyncRef.current = performSync; }, [performSync]);
 
     // Create/update player when API is ready and videoId changes
+    // NOTE: `playing` and callback props are intentionally excluded from deps.
+    // Play/pause is handled by the dedicated effect below, and callbacks use
+    // stable refs so the player is never torn down just because a parent
+    // re-rendered with fresh inline functions.
     useEffect(() => {
       if (!isApiReady || !containerRef.current) return;
 
@@ -137,7 +155,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
 
       if (playerRef.current && currentVideoIdRef.current === videoId) {
-        // Same video, just toggle play/pause
+        // Same video, just toggle play/pause (handled by the other effect)
         return;
       }
  
@@ -148,7 +166,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         playerRef.current.loadVideoById(videoId);
         // If the room is currently playing, ensure the loaded video starts
         try {
-          if (playing) {
+          if (playingRef.current) {
             playerRef.current.playVideo();
           }
         } catch {
@@ -172,7 +190,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         width: '1',
         videoId: videoId,
         playerVars: {
-          autoplay: playing ? 1 : 0,
+          autoplay: playingRef.current ? 1 : 0,
           controls: 0,
           disablekb: 1,
           fs: 0,
@@ -188,7 +206,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
             // happened), so this is backed up by the onStateChange handler below.
             performSyncRef.current();
 
-            if (playing) {
+            if (playingRef.current) {
               event.target.playVideo();
             }
 
@@ -203,11 +221,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
               getPlayerState: () => event.target.getPlayerState() ?? -1,
               resync: () => performSyncRef.current(),
             };
-            onSyncReady?.(handle);
-            onReady?.();
+            onSyncReadyRef.current?.(handle);
+            onReadyRef.current?.();
           },
           onStateChange: (event: any) => {
-            onStateChange?.(event.data);
+            onStateChangeRef.current?.(event.data);
 
             // First time this video actually starts playing (e.g. once a
             // late-joiner's browser allows playback, or after an autoplay
@@ -220,7 +238,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
 
             // YT.PlayerState.ENDED === 0
             if (event.data === 0) {
-              onEnd?.();
+              onEndRef.current?.();
             }
           },
           onError: (event: any) => {
@@ -228,7 +246,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           },
         },
       });
-    }, [isApiReady, videoId, playing, onReady, onEnd, onStateChange, onSyncReady, performSync]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isApiReady, videoId]);
 
     // Handle play/pause changes
     useEffect(() => {

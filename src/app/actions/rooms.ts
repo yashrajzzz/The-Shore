@@ -130,10 +130,10 @@ export async function addToQueue(
 
   if (insertError) return { error: insertError.message }
 
-  // If room is currently silent, trigger playNextSong automatically!
-  const { data: room } = await supabase.from('rooms').select('current_song_url, is_playing').eq('id', roomId).single();
+  // If room is currently silent (no song at all), trigger playNextSong automatically!
+  const { data: room } = await supabase.from('rooms').select('current_song_url').eq('id', roomId).single();
   
-  if (room && (!room.current_song_url || !room.is_playing)) {
+  if (room && !room.current_song_url) {
      await playNextSong(roomId);
   }
 
@@ -179,10 +179,10 @@ export async function addUrlToQueue(roomId: string, videoUrl: string) {
 
   if (insertError) return { error: insertError.message }
 
-  // If room is currently silent, trigger playNextSong automatically!
-  const { data: room } = await supabase.from('rooms').select('current_song_url, is_playing').eq('id', roomId).single();
+  // If room is currently silent (no song at all), trigger playNextSong automatically!
+  const { data: room } = await supabase.from('rooms').select('current_song_url').eq('id', roomId).single();
   
-  if (room && (!room.current_song_url || !room.is_playing)) {
+  if (room && !room.current_song_url) {
      await playNextSong(roomId);
   }
 

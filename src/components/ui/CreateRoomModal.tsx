@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from './Button';
 import { Window } from './Window';
 import { createRoom } from '@/app/actions/rooms';
@@ -12,6 +13,7 @@ export function CreateRoomModal() {
   const [error, setError] = useState('');
   const [isPending, setIsPending] = useState(false);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
+  const router = useRouter();
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -31,10 +33,15 @@ export function CreateRoomModal() {
     } else {
       setIsOpen(false);
       setSelectedUrls([]);
+      // Navigate to the newly created room
+      if (result?.room?.id) {
+        router.push(`/room/${result.room.id}`);
+      }
     }
 
     setIsPending(false);
   }
+
 
   return (
     <>
