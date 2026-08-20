@@ -11,9 +11,13 @@ export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytP
   const [visible, setVisible] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!window.sessionStorage.getItem(storageKey)) {
+    if (window.sessionStorage.getItem(storageKey)) return;
+
+    const frame = window.requestAnimationFrame(() => {
       setVisible(true);
-    }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [storageKey]);
 
   const handleEnable = async () => {
@@ -45,4 +49,3 @@ export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytP
     </div>
   );
 }
-
