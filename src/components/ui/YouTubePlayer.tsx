@@ -109,7 +109,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       loadYTApi().then(() => setIsApiReady(true));
     }, []);
 
-    // Sync seek for late-joiners
+    // Sync seek for late-joiners. Below MIN_SYNC_DIFF_SECONDS we deliberately
+    // do nothing: `startedAt` is stamped in the DB the instant a song is
+    // chosen, but loading the YouTube IFrame API + constructing the player +
+    // initial buffering routinely eats 3-6 seconds on its own. Without this
+    // floor, that ordinary load latency gets misread as "lateness" and every
+    // track — including for whoever just started it — has its intro skipped.
+    // A real late-joiner (opening the room mid-song, reconnecting after a
+    // while) is seconds-to-minutes behind, well above this floor, and still
+    // gets caught up correctly.
+    const MIN_SYNC_DIFF_SECONDS = 8;
     const performSync = useCallback(() => {
       if (!startedAt || !playerRef.current) return;
 
@@ -117,7 +126,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       const now = Date.now();
       const diffSeconds = (now - startTime) / 1000;
 
-      if (diffSeconds > 0 && diffSeconds < 7200) {
+      if (diffSeconds > MIN_SYNC_DIFF_SECONDS && diffSeconds < 7200) {
         // Only sync if within 2 hours and player supports seekTo
         if (typeof playerRef.current?.seekTo === 'function') {
           playerRef.current.seekTo(diffSeconds, true);
