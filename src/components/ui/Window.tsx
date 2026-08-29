@@ -9,12 +9,12 @@ interface WindowProps {
 
 export function Window({ title, children, className = '', onClose }: WindowProps) {
   return (
-    <div className={`w-full max-w-[1080px] bg-paper/40 backdrop-blur-md border-[2.5px] border-ink rounded-[16px] shadow-[8px_8px_0_var(--color-ink)] overflow-hidden ${className}`}>
+    <div className={`w-full max-w-[1080px] max-h-[85vh] flex flex-col bg-paper/40 backdrop-blur-md border-[2.5px] border-ink rounded-[16px] shadow-[8px_8px_0_var(--color-ink)] overflow-hidden ${className}`}>
       {/* Titlebar */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 bg-cream-deep/60 backdrop-blur-md border-b-[2.5px] border-ink">
+      <div className="shrink-0 flex items-center justify-between px-3.5 py-2.5 bg-cream-deep/60 backdrop-blur-md border-b-[2.5px] border-ink">
         <div className="flex gap-[7px]">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="w-3 h-3 rounded-full border-[1.6px] border-ink bg-coral block cursor-pointer hover:bg-coral-deep"
             title={onClose ? "Close" : ""}
             disabled={!onClose}
@@ -27,7 +27,11 @@ export function Window({ title, children, className = '', onClose }: WindowProps
         </div>
         <div style={{ width: '40px' }} /> {/* Spacer for balance */}
       </div>
-      {children}
+      {/* Body — scrolls on its own so growing content (e.g. search results)
+          never pushes the titlebar off-screen or gets clipped by the viewport. */}
+      <div className="min-h-0 overflow-y-auto overflow-x-hidden">
+        {children}
+      </div>
     </div>
   );
 }

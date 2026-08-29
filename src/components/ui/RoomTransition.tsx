@@ -117,7 +117,16 @@ export function RoomTransitionProvider({ children }: { children: React.ReactNode
     [go, router]
   );
   const exitRoom = useCallback<ExitRoomFn>(
-    (href, lines) => go('exit', { lines, navigate: () => router.push(href) }),
+    (href, lines) => {
+      // Leaving as host deletes the room row, which echoes back through the
+      // room's own realtime subscription as a DELETE event that also calls
+      // exitRoom. Without this guard the second call resets risenRef/
+      // navDoneRef mid-animation while the wave's target clipPath hasn't
+      // actually changed, so onAnimationComplete never re-fires and the
+      // transition gets stuck covered forever. Ignore the re-entrant call.
+      if (phaseRef.current !== 'idle') return;
+      go('exit', { lines, navigate: () => router.push(href) });
+    },
     [go, router]
   );
   // For a room reached without going through enterRoom (a fresh/cold load

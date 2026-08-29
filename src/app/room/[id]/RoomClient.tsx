@@ -8,6 +8,7 @@ import { BackgroundPicker } from '@/components/ui/BackgroundPicker';
 import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 import { SongSearch } from '@/components/ui/SongSearch';
+import { AddPlaylistToQueue } from '@/components/ui/AddPlaylistToQueue';
 import { SongProgressBar } from '@/components/ui/SongProgressBar';
 import Image from 'next/image';
 import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
@@ -252,8 +253,31 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   }, [roomIdStr]);
 
   const handleRemoveFromQueue = useCallback(async (queueItemId: string | number) => {
-    setQueue(prev => prev.filter(item => item.id !== queueItemId));
-    await removeFromQueue(roomIdStr, queueItemId);
+    // Remove immediately, then put it back (at its original spot) if the
+    // delete actually fails server-side, instead of leaving the local queue
+    // silently out of sync with the DB.
+    let removedItem: QueueItem | undefined;
+    let removedIndex = -1;
+    setQueue(prev => {
+      removedIndex = prev.findIndex(item => item.id === queueItemId);
+      removedItem = prev.find(item => item.id === queueItemId);
+      return prev.filter(item => item.id !== queueItemId);
+    });
+
+    const res = await removeFromQueue(roomIdStr, queueItemId);
+    if (res?.error) {
+      alert(res.error);
+      const itemToRestore = removedItem;
+      const insertAt = removedIndex;
+      if (itemToRestore) {
+        setQueue(prev => {
+          if (prev.some(item => item.id === queueItemId)) return prev;
+          const next = [...prev];
+          next.splice(Math.min(insertAt, next.length), 0, itemToRestore);
+          return next;
+        });
+      }
+    }
   }, [roomIdStr]);
 
   const handlePlaySongNow = useCallback(async (queueItemId: string | number) => {
@@ -509,7 +533,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Sidebar Panel */}
       <div style={{ width: sidebarWidth }}
-        className={`fixed top-0 right-0 bottom-0 bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
+        className={`fixed top-0 right-0 h-dvh bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
         <div onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize'; }}
           className="absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
 
@@ -556,14 +580,20 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           )}
 
           {activeTab === 'queue' && (
-            <div className="flex-1 min-h-0 min-w-0 flex flex-col p-4 gap-4">
-              <div className="shrink-0">
-                <SongSearch onAddToQueue={handleAddToQueue} ytPlayerRef={ytPlayerRef} isRoomPlaying={Boolean(room.is_playing)} onPreviewStateChange={setIsPreviewing} />
+            // The search box's own results list can grow past what fits (up
+            // to its internal 320px cap plus the input/hint above it) — this
+            // whole tab scrolls as one region instead of splitting into a
+            // shrink-0 search block + flex-1 queue list, so a tall result
+            // set never gets silently clipped by the parent's overflow-hidden.
+            <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col p-4 gap-4">
+              <div className="shrink-0 flex flex-col gap-2">
+                <AddPlaylistToQueue roomId={roomIdStr} />
+                <SongSearch onAddToQueue={handleAddToQueue} ytPlayerRef={ytPlayerRef} isRoomPlaying={Boolean(room.is_playing)} onPreviewStateChange={setIsPreviewing} enablePlaylistSave />
               </div>
               {queue.length > 0 && (
                 <>
                   <div className="shrink-0 text-[9px] uppercase tracking-widest font-mono text-ink-soft/60 font-bold border-t-[1.5px] border-ink/20 pt-3">Playlist · {queue.length} songs</div>
-                  <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pr-1">
+                  <div className="shrink-0 pr-1">
                     <QueueList
                       queue={queue}
                       currentQueueId={room.current_queue_id ?? undefined}

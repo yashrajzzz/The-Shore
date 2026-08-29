@@ -2,6 +2,7 @@ import { Window } from "@/components/ui/Window";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { CreateRoomModal } from "@/components/ui/CreateRoomModal";
+import { PlaylistsModal } from "@/components/ui/PlaylistsModal";
 import { DeleteRoomButton } from "@/components/ui/DeleteRoomButton";
 import { ClosableWindow } from "@/components/ui/ClosableWindow";
 import { RoomCardLink } from "@/components/ui/RoomCardLink";
@@ -43,7 +44,10 @@ export default async function LobbyPage({
                   <h1 className="font-pixel text-3xl mb-1">Hello, {displayName}!</h1>
                   <p className="text-sm text-ink-soft">Join a room or start your own vibe.</p>
                 </div>
-                <CreateRoomModal />
+                <div className="flex gap-3">
+                  <PlaylistsModal />
+                  <CreateRoomModal />
+                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

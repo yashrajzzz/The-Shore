@@ -204,7 +204,7 @@ type QueueRow = {
   position?: number | null;
 };
 
-async function nextQueuePosition(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string): Promise<number> {
+export async function nextQueuePosition(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string): Promise<number> {
   const { data } = await supabase
     .from('queue')
     .select('position')
