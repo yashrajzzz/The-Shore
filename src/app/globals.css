@@ -52,3 +52,12 @@ body {
   0% { background-position: 0% 0%, 0% 0%, 0% 0%; }
   100% { background-position: 20% 10%, -15% -10%, 10% 5%; }
 }
+
+@keyframes bg-dial-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(-2deg); }
+}
+
+@keyframes bg-dial-spark {
+  to { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}

@@ -140,7 +140,7 @@ function LoginForm() {
                     <Button type="submit" variant="primary" disabled={isPending} className="flex-1">
                       {isPending ? 'Logging In...' : 'Log In'}
                     </Button>
-                    <Button type="button" variant="secondary" onClick={() => { setIsLogin(false); setError(null); }} className="flex-1 border-[2px] text-ink hover:bg-cream py-2 px-0 text-[12px]">
+                    <Button type="button" variant="secondary" onClick={() => { setIsLogin(false); setError(null); }} className="flex-1 rounded-full border-[2px] text-ink hover:bg-cream py-2 px-0 text-[12px]">
                       Create Account
                     </Button>
                   </>
@@ -149,7 +149,7 @@ function LoginForm() {
                     <Button type="submit" variant="primary" disabled={isPending} className="flex-1">
                       {isPending ? 'Signing Up...' : 'Sign Up'}
                     </Button>
-                    <Button type="button" variant="secondary" onClick={() => { setIsLogin(true); setError(null); }} className="flex-1 border-[2px] text-ink hover:bg-cream py-2 px-0 text-[12px]">
+                    <Button type="button" variant="secondary" onClick={() => { setIsLogin(true); setError(null); }} className="flex-1 rounded-full border-[2px] text-ink hover:bg-cream py-2 px-0 text-[12px]">
                       Back to Login
                     </Button>
                   </>

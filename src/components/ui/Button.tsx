@@ -1,4 +1,5 @@
 import React from 'react';
+import { twMerge } from 'tailwind-merge';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'icon' | 'play' | 'action';
@@ -20,7 +21,7 @@ export function Button({ variant = 'primary', className = '', children, ...props
   }
 
   return (
-    <button className={`${baseClasses} ${className}`} {...props}>
+    <button className={twMerge(baseClasses, className)} {...props}>
       {children}
     </button>
   );

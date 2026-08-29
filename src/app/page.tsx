@@ -23,17 +23,13 @@ export default function Home() {
                 </Button>
               </Link>
               <Link href="/login" className="flex-1">
-                <Button variant="secondary" className="w-full py-3 text-sm text-ink border-[2px] hover:bg-cream">
+                <Button variant="secondary" className="w-full py-3 text-sm text-ink rounded-full border-[2px] hover:bg-cream">
                   Sign Up
                 </Button>
               </Link>
             </div>
           </div>
         </Window>
-        
-        <p className="mt-8 text-center text-[10px] text-ink-soft">
-          prototype — The Shore · rooms cap at 10 listeners · v0.1
-        </p>
       </div>
     </div>
   );

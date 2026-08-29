@@ -28,10 +28,6 @@ export function Taskbar() {
           <Image src="/bunny-favicon.png" alt="Bunny Logo" width={48} height={48} className="object-contain" />
           <Image src="/the-shore-logo.png" alt="The Shore" width={120} height={40} className="object-contain" />
         </Link>
-        <div className="hidden sm:flex gap-4 text-[13px] text-ink-soft font-mono">
-          <Link href="/lobby" className="hover:text-ink hover:underline font-bold text-ink">My Rooms</Link>
-          <span className="cursor-not-allowed opacity-50">Queue</span>
-        </div>
       </div>
       <div className="flex items-center gap-[14px] text-[13px]">
         {/* Placeholder for now playing tick */}

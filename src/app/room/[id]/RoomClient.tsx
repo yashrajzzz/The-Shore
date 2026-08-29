@@ -3,7 +3,6 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue } from '@/app/actions/rooms';
-import { useRouter } from 'next/navigation';
 import { setGlobalBackground } from '@/components/ui/GlobalBackground';
 import { BackgroundPicker } from '@/components/ui/BackgroundPicker';
 import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
@@ -15,6 +14,7 @@ import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause
 import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
+import { useRoomTransition } from '@/components/ui/RoomTransition';
 
 type Room = {
   id?: string;
@@ -45,7 +45,15 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   // Now Playing card and play/pause button keep showing/acting on the real
   // room state while the room is actually silent for this listener.
   const [isPreviewing, setIsPreviewing] = useState(false);
-  const router = useRouter();
+  const { exitRoom, revealCurrent } = useRoomTransition();
+  // Covers a room reached without going through CreateRoomModal's enterRoom
+  // (a shared invite link opened fresh, a plain lobby-card click, a browser
+  // back/forward) with the same wave — welcoming rather than an abrupt
+  // no-transition landing. No-ops if enterRoom already covered this navigation.
+  useEffect(() => {
+    revealCurrent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const ytPlayerRef = useRef<YouTubePlayerHandle>(null);
   // Tracks the play/pause state the user last asked for, so rapid clicks
   // coalesce into a single in-flight request instead of flooding the server,
@@ -154,8 +162,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         });
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdStr}` }, () => {
-        alert("The host has left or the room was closed.");
-        router.push('/lobby');
+        exitRoom('/lobby', ['Room closed', 'by the host']);
       })
       .subscribe();
 
@@ -641,7 +648,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                     if (isHost) {
                       await destroyRoom(roomIdStr);
                     }
-                    router.push('/lobby');
+                    exitRoom('/lobby');
                   }}
                   className="w-full bg-coral border-2 border-ink rounded-xl py-3 text-sm font-bold font-mono shadow-[4px_4px_0_var(--color-ink)] hover:translate-y-0.5 hover:shadow-[2px_2px_0_var(--color-ink)] transition-all flex items-center justify-center gap-2 text-ink">
                   <LogOut size={16} /> Leave Room

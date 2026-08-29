@@ -22,6 +22,7 @@ const pressStart = Press_Start_2P({
 
 import { GlobalBackground } from "@/components/ui/GlobalBackground";
 import { AppLayoutWrapper } from "@/components/ui/AppLayoutWrapper";
+import { RoomTransitionProvider } from "@/components/ui/RoomTransition";
 
 export const metadata: Metadata = {
   title: "The Shore",
@@ -40,9 +41,11 @@ export default function RootLayout({
     >
       <body className="h-full flex flex-col relative overflow-hidden">
         <GlobalBackground />
-        <AppLayoutWrapper>
-          {children}
-        </AppLayoutWrapper>
+        <RoomTransitionProvider>
+          <AppLayoutWrapper>
+            {children}
+          </AppLayoutWrapper>
+        </RoomTransitionProvider>
       </body>
     </html>
   );

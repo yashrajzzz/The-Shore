@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { CreateRoomModal } from "@/components/ui/CreateRoomModal";
 import { DeleteRoomButton } from "@/components/ui/DeleteRoomButton";
 import { ClosableWindow } from "@/components/ui/ClosableWindow";
+import { RoomCardLink } from "@/components/ui/RoomCardLink";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -47,7 +48,7 @@ export default async function LobbyPage({
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {rooms && rooms.length > 0 ? rooms.map((room) => (
-                  <Link href={`/room/${room.id}`} key={room.id} className="block relative group">
+                  <RoomCardLink href={`/room/${room.id}`} key={room.id} className="block relative group">
                     <div className="h-full bg-cream/80 backdrop-blur-sm border-2 border-ink rounded-xl p-4 shadow-[4px_4px_0_var(--color-ink)] group-hover:-translate-y-1 group-hover:-translate-x-1 group-hover:shadow-[5px_5px_0_var(--color-ink)] transition-all cursor-pointer">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex gap-2">
@@ -64,7 +65,7 @@ export default async function LobbyPage({
                         {room.background_urls && room.background_urls.length > 0 ? `${room.background_urls.length} Slideshow Backgrounds` : 'Standard room'}
                       </p>
                     </div>
-                  </Link>
+                  </RoomCardLink>
                 )) : (
                   <div className="col-span-full flex items-center justify-center p-12 text-ink-soft border-2 border-dashed border-ink-soft rounded-xl">
                     <p className="font-mono text-sm">No active rooms right now. Be the first!</p>

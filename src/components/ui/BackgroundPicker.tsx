@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import {
-  listDefaultBackgrounds,
-  listUserBackgrounds,
   deleteUserBackground,
   uploadUserBackground,
 } from '@/app/actions/backgrounds';
@@ -14,6 +12,7 @@ import {
   isVideoBackground,
   type BackgroundItem,
 } from '@/utils/backgrounds';
+import { getBackgroundLibrary, getCachedLibrary, invalidateBackgroundLibrary } from '@/utils/backgroundLibraryCache';
 import { Button } from './Button';
 import { X, Upload, Trash2, Check } from 'lucide-react';
 
@@ -94,25 +93,23 @@ export function BackgroundPicker({
   allowLibraryManagement = true,
   compact = false,
 }: BackgroundPickerProps) {
+  const initialCache = getCachedLibrary();
   const [tab, setTab] = useState<'defaults' | 'library'>('defaults');
-  const [defaults, setDefaults] = useState<BackgroundItem[]>([]);
-  const [userItems, setUserItems] = useState<BackgroundItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [defaults, setDefaults] = useState<BackgroundItem[]>(initialCache?.defaults ?? []);
+  const [userItems, setUserItems] = useState<BackgroundItem[]>(initialCache?.userItems ?? []);
+  const [isLoading, setIsLoading] = useState(!initialCache);
   const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialCache?.userError ?? '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadBackgrounds = useCallback(async () => {
-    setIsLoading(true);
+  const loadBackgrounds = useCallback(async (force = false) => {
+    if (!getCachedLibrary()) setIsLoading(true);
     setError('');
     try {
-      const [defaultItems, userResult] = await Promise.all([
-        listDefaultBackgrounds(),
-        listUserBackgrounds(),
-      ]);
-      setDefaults(defaultItems);
-      setUserItems(userResult.items);
-      if (userResult.error) setError(userResult.error);
+      const lib = await getBackgroundLibrary({ force });
+      setDefaults(lib.defaults);
+      setUserItems(lib.userItems);
+      if (lib.userError) setError(lib.userError);
     } catch {
       setError('Failed to load backgrounds');
     }
@@ -120,6 +117,12 @@ export function BackgroundPicker({
   }, []);
 
   useEffect(() => {
+    // Cached data (if any) already painted synchronously above; this call
+    // resolves instantly from cache when fresh, or revalidates in the
+    // background otherwise — either way the picker never re-fetches on
+    // every open the way it used to. Deferred via setTimeout so the
+    // (async) setState calls inside loadBackgrounds don't run synchronously
+    // within the effect body.
     const timer = setTimeout(() => {
       loadBackgrounds();
     }, 0);
@@ -169,7 +172,8 @@ export function BackgroundPicker({
       }
     }
 
-    await loadBackgrounds();
+    invalidateBackgroundLibrary();
+    await loadBackgrounds(true);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -188,7 +192,8 @@ export function BackgroundPicker({
       onSelectionChange(selectedUrls.filter((u) => u !== item.url));
     }
 
-    await loadBackgrounds();
+    invalidateBackgroundLibrary();
+    await loadBackgrounds(true);
   };
 
   const currentItems = tab === 'defaults' ? defaults : userItems;

@@ -1,19 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Check } from 'lucide-react';
 import { Button } from './Button';
 import { Window } from './Window';
 import { createRoom } from '@/app/actions/rooms';
 import { BackgroundPicker } from './BackgroundPicker';
 import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
+import { useRoomTransition } from './RoomTransition';
 
 export function CreateRoomModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState('');
   const [isPending, setIsPending] = useState(false);
+  const [justConfirmed, setJustConfirmed] = useState(false);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
-  const router = useRouter();
+  const { enterRoom } = useRoomTransition();
+
+  function reset() {
+    setIsOpen(false);
+    setSelectedUrls([]);
+    setJustConfirmed(false);
+    setError('');
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -27,21 +37,23 @@ export function CreateRoomModal() {
     }
 
     const result = await createRoom(formData);
+    setIsPending(false);
 
     if (result?.error) {
       setError(result.error);
-    } else {
-      setIsOpen(false);
-      setSelectedUrls([]);
-      // Navigate to the newly created room
-      if (result?.room?.id) {
-        router.push(`/room/${result.room.id}`);
-      }
+      return;
     }
 
-    setIsPending(false);
+    if (result?.room?.id) {
+      // Brief press/confirm state on the button, then the wave overlay
+      // takes over: it covers the whole screen, the room mounts behind
+      // it while hidden, and it recedes to reveal the room already loaded.
+      setJustConfirmed(true);
+      enterRoom(`/room/${result.room.id}`);
+    } else {
+      reset();
+    }
   }
-
 
   return (
     <>
@@ -62,7 +74,8 @@ export function CreateRoomModal() {
                       name="name"
                       type="text"
                       required
-                      className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
+                      disabled={justConfirmed}
+                      className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2 disabled:opacity-60"
                       placeholder="e.g. #midnightdrive"
                       maxLength={32}
                     />
@@ -90,12 +103,48 @@ export function CreateRoomModal() {
                   )}
 
                   <div className="flex gap-3 mt-4">
-                    <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsOpen(false)}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => setIsOpen(false)}
+                      disabled={justConfirmed}
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" variant="primary" className="flex-1" disabled={isPending}>
-                      {isPending ? 'Creating...' : 'Create'}
-                    </Button>
+                    <motion.div className="flex-1" whileTap={justConfirmed ? undefined : { scale: 0.94 }}>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        className="w-full overflow-hidden"
+                        disabled={isPending || justConfirmed}
+                      >
+                        <AnimatePresence mode="wait" initial={false}>
+                          {justConfirmed ? (
+                            <motion.span
+                              key="confirmed"
+                              initial={{ scale: 0.96, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{ duration: 0.22, ease: [0.33, 1, 0.68, 1] }}
+                              className="flex items-center gap-1.5"
+                            >
+                              <Check size={14} strokeWidth={3} />
+                              Created!
+                            </motion.span>
+                          ) : (
+                            <motion.span
+                              key="idle"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              {isPending ? 'Creating...' : 'Create'}
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </Button>
+                    </motion.div>
                   </div>
                 </form>
               </div>

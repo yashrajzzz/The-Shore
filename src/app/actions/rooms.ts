@@ -51,7 +51,12 @@ export async function createRoom(formData: FormData) {
     return { error: error.message }
   }
 
-  revalidatePath('/lobby')
+  // No revalidatePath here: the caller navigates straight to the new room,
+  // and revalidating /lobby while CreateRoomModal is still mounted there
+  // forces an immediate refetch/re-render of the lobby route mid-navigation,
+  // which remounts the modal back to its empty state right before the room
+  // page takes over. The lobby is dynamically rendered per-request anyway,
+  // so it picks up the new room next time it's visited without this.
   return { success: true, room }
 }
 
