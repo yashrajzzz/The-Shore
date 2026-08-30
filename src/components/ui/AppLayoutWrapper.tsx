@@ -2,6 +2,7 @@
 import { usePathname } from 'next/navigation';
 import { Taskbar } from './Taskbar';
 import { FloatingBackgroundButton } from './FloatingBackgroundButton';
+import { FullscreenToggleButton } from './FullscreenToggleButton';
 import { PageTransition } from './PageTransition';
 
 export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,7 @@ export function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
         <PageTransition>{children}</PageTransition>
       </main>
       {!isRoom && !isAuthPage && <FloatingBackgroundButton />}
+      <FullscreenToggleButton />
     </>
   );
 }
