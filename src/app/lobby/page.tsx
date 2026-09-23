@@ -38,13 +38,13 @@ export default async function LobbyPage({
       <div className="relative z-10 w-full max-w-4xl mt-12">
         {!isHidden ? (
           <ClosableWindow title="My Rooms">
-            <div className="p-8 min-h-[400px]">
-              <div className="flex justify-between items-center mb-8 border-b-[2.5px] border-ink pb-4">
+            <div className="p-4 sm:p-8 min-h-[400px]">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 border-b-[2.5px] border-ink pb-4">
                 <div>
-                  <h1 className="font-pixel text-3xl mb-1">Hello, {displayName}!</h1>
+                  <h1 className="font-pixel text-2xl sm:text-3xl mb-1">Hello, {displayName}!</h1>
                   <p className="text-sm text-ink-soft">Join a room or start your own vibe.</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <PlaylistsModal />
                   <CreateRoomModal />
                 </div>

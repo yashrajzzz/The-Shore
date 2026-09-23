@@ -70,7 +70,7 @@ function BackgroundThumbnail({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="absolute bottom-1 right-1 w-6 h-6 bg-coral border-2 border-ink rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute bottom-1 right-1 w-6 h-6 bg-coral border-2 border-ink rounded-md flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
           title="Remove from library"
         >
           <Trash2 size={12} />
@@ -239,7 +239,7 @@ export function BackgroundPicker({
             : 'No default backgrounds available.'}
         </div>
       ) : (
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
           {currentItems.map((item) => (
             <BackgroundThumbnail
               key={item.url}

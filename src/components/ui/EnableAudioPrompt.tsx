@@ -41,9 +41,9 @@ export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytP
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] pointer-events-auto">
-      <div className="bg-cream border-2 border-ink px-4 py-3 rounded-2xl shadow-[4px_4px_0_var(--color-ink)] flex items-center gap-3">
-        <div className="text-sm font-mono text-ink">Tap to enable audio for this room</div>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] pointer-events-auto w-[calc(100vw-2rem)] max-w-sm">
+      <div className="bg-cream border-2 border-ink px-4 py-3 rounded-2xl shadow-[4px_4px_0_var(--color-ink)] flex flex-wrap items-center justify-center gap-3">
+        <div className="text-sm font-mono text-ink text-center">Tap to enable audio for this room</div>
         <Button variant="primary" onClick={handleEnable} className="px-3 py-1">Enable</Button>
       </div>
     </div>

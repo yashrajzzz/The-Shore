@@ -144,9 +144,9 @@ function PlaylistDetail({ playlist, onBack, onSongCountChange }: {
         <div className="bg-pink border-2 border-ink p-2 rounded text-xs text-center mb-4 shrink-0">{error}</div>
       )}
 
-      <div className="flex-1 min-h-0 min-w-0 flex gap-6">
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col sm:flex-row gap-4 sm:gap-6">
         {/* Left Column: Search */}
-        <div className="flex-1 min-w-0 flex flex-col min-h-0 border-r-[1.5px] border-ink/10 pr-6">
+        <div className="flex-1 min-w-0 flex flex-col min-h-[240px] sm:min-h-0 border-b-[1.5px] sm:border-b-0 sm:border-r-[1.5px] border-ink/10 pb-4 sm:pb-0 sm:pr-6">
           {songs.length < MAX_SONGS_PER_PLAYLIST && (
             <SongSearch
               onAddToQueue={handleAdd}
@@ -340,7 +340,7 @@ export function PlaylistsModal() {
                             </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDelete(playlist.id); }}
-                              className="w-7 h-7 rounded-lg border-[1.5px] border-ink bg-paper flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-pink/60 transition-all shrink-0"
+                              className="w-7 h-7 rounded-lg border-[1.5px] border-ink bg-paper flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-pink/60 transition-all shrink-0"
                               title="Delete playlist"
                             >
                               <Trash2 size={12} />

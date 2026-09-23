@@ -70,12 +70,22 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, compact = false, onSee
     handleSeek(e.clientX);
   }, [handleSeek]);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setIsSeeking(true);
+    handleSeek(e.touches[0].clientX);
+  }, [handleSeek]);
+
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isSeeking) return;
     handleSeek(e.clientX);
   }, [isSeeking, handleSeek]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isSeeking) return;
+    handleSeek(e.touches[0].clientX);
+  }, [isSeeking, handleSeek]);
+
+  const handleSeekEnd = useCallback(() => {
     if (!isSeeking) return;
     setIsSeeking(false);
     try {
@@ -91,13 +101,17 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, compact = false, onSee
   useEffect(() => {
     if (isSeeking) {
       window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mouseup', handleSeekEnd);
+      window.addEventListener('touchmove', handleTouchMove);
+      window.addEventListener('touchend', handleSeekEnd);
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('mouseup', handleSeekEnd);
+        window.removeEventListener('touchmove', handleTouchMove);
+        window.removeEventListener('touchend', handleSeekEnd);
       };
     }
-  }, [isSeeking, handleMouseMove, handleMouseUp]);
+  }, [isSeeking, handleMouseMove, handleTouchMove, handleSeekEnd]);
 
   const progress = duration > 0 ? ((isSeeking ? seekTime : currentTime) / duration) * 100 : 0;
 
@@ -124,8 +138,9 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, compact = false, onSee
       {/* Progress bar */}
       <div
         ref={barRef}
-        className={`relative flex-1 h-[6px] bg-ink/10 rounded-full overflow-hidden group cursor-pointer`}
+        className={`relative flex-1 h-[6px] bg-ink/10 rounded-full overflow-visible group cursor-pointer touch-none`}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
       >
         {/* Track fill */}
         <div
@@ -138,7 +153,7 @@ export function SongProgressBar({ ytPlayerRef, isPlaying, compact = false, onSee
 
         {/* Scrubber handle */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-paper border-[2px] border-ink shadow-[1px_1px_0_var(--color-ink)] opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-paper border-[2px] border-ink shadow-[1px_1px_0_var(--color-ink)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
           style={{
             left: `calc(${progress}% - 6px)`,
             transition: isSeeking ? 'none' : 'left 0.5s linear',

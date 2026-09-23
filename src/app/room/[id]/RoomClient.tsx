@@ -441,7 +441,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       )}
 
       {/* Top Bar */}
-      <div className="flex justify-end p-6 pointer-events-auto shrink-0">
+      <div className="flex justify-end p-4 sm:p-6 pointer-events-auto shrink-0">
         <button onClick={() => setIsSidebarOpen(true)}
           className="w-12 h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
@@ -462,7 +462,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                 <span className="text-coral">paused · previewing another song</span>
               ) : 'now playing'}
             </div>
-            <div className={`font-pixel text-4xl leading-snug max-w-2xl ${isPreviewing ? 'text-paper/40' : 'text-paper'}`}>{room.current_song_title}</div>
+            <div className={`font-pixel text-2xl sm:text-3xl md:text-4xl leading-snug max-w-2xl ${isPreviewing ? 'text-paper/40' : 'text-paper'}`}>{room.current_song_title}</div>
             {room.current_song_artist && (
               <div className="text-sm text-paper/70 font-mono mt-1">{room.current_song_artist}</div>
             )}
@@ -483,9 +483,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       </div>
 
       {/* Floating Player Bar */}
-      <div className="p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
-        <div className="bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-6 py-3 shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center gap-2">
-          <div className="flex items-center gap-6">
+      <div className="p-4 sm:p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
+        <div className="bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-6 py-3 shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center gap-2 max-w-full">
+          <div className="flex items-center gap-3 sm:gap-6">
             <div className="flex items-center gap-3">
               {room.current_song_artwork ? (
                 <Image src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
@@ -533,9 +533,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Sidebar Panel */}
       <div style={{ width: sidebarWidth }}
-        className={`fixed top-0 right-0 h-dvh bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
+        className={`fixed top-0 right-0 h-dvh w-full max-w-full sm:max-w-none bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
         <div onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize'; }}
-          className="absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
+          className="hidden sm:block absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
 
         <div className="shrink-0 flex items-center justify-between px-6 py-5 border-b-[2.5px] border-ink bg-cream/50">
           <h2 className="font-pixel text-xl text-ink leading-none truncate max-w-[200px]">{String(room.name)}</h2>
