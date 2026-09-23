@@ -76,6 +76,18 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     // Guards against seekTo() being ignored when called too early (before the
     // player has actually started buffering) — see performSync below.
     const hasSyncedPlaybackRef = useRef(false);
+    // Timestamp of the last seekTo() issued through the imperative handle
+    // (i.e. a deliberate local seek, like dragging the progress bar). The
+    // "re-sync when startedAt changes" effect below exists to catch OTHER
+    // listeners' seeks / late-join sync — but that same local seek also
+    // updates `startedAt` (via the room's optimistic update, then again via
+    // the realtime echo of our own write), which would otherwise trigger a
+    // second, redundant seekTo() to almost the same position a moment later.
+    // That second seek briefly buffers, and getCurrentTime() reports a
+    // stale/zeroed value during that window — visible as the scrubber
+    // snapping back toward the start before landing on the right spot.
+    const lastManualSeekAtRef = useRef(0);
+    const MANUAL_SEEK_SUPPRESS_WINDOW_MS = 1500;
 
     // ---- Stable refs for event callbacks ----
     // These are bound once when the YT.Player is constructed and reused for
@@ -97,7 +109,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       pauseVideo: () => playerRef.current?.pauseVideo?.(),
       mute: () => playerRef.current?.mute?.(),
       unMute: () => playerRef.current?.unMute?.(),
-      seekTo: (seconds: number) => playerRef.current?.seekTo?.(seconds, true),
+      seekTo: (seconds: number) => {
+        lastManualSeekAtRef.current = Date.now();
+        playerRef.current?.seekTo?.(seconds, true);
+      },
       getCurrentTime: () => playerRef.current?.getCurrentTime?.() || 0,
       getDuration: () => playerRef.current?.getDuration?.() || 0,
       getPlayerState: () => playerRef.current?.getPlayerState?.() ?? -1,
@@ -129,6 +144,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       if (diffSeconds > MIN_SYNC_DIFF_SECONDS && diffSeconds < 7200) {
         // Only sync if within 2 hours and player supports seekTo
         if (typeof playerRef.current?.seekTo === 'function') {
+          // Prevent jarring double-seeks from realtime echoes:
+          // If we're already very close to the target sync time, do nothing.
+          const current = playerRef.current.getCurrentTime() || 0;
+          if (Math.abs(current - diffSeconds) < 2) {
+            return;
+          }
+          
           playerRef.current.seekTo(diffSeconds, true);
           // YouTube's seekTo() unconditionally resumes playback even if the
           // video was paused, so re-assert the intended state right after.
@@ -276,11 +298,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
     }, [playing]);
 
-    // Re-sync when startedAt changes (new song loaded by another user)
+    // Re-sync when startedAt changes (new song loaded, or someone seeked).
+    // Skipped right after OUR OWN manual seek: that seekTo() already landed
+    // the player at the right spot, and this effect would otherwise fire a
+    // moment later (from the optimistic room update, then again from the
+    // realtime echo of that same write) and re-seek to virtually the same
+    // position — a redundant seek that briefly buffers and visibly snaps
+    // the scrubber back before correcting itself.
     useEffect(() => {
-      if (startedAt && playerRef.current) {
-        performSync();
-      }
+      if (!startedAt || !playerRef.current) return;
+      if (Date.now() - lastManualSeekAtRef.current < MANUAL_SEEK_SUPPRESS_WINDOW_MS) return;
+      performSync();
     }, [startedAt, performSync]);
 
     // Cleanup on unmount

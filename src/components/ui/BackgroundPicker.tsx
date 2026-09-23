@@ -239,7 +239,7 @@ export function BackgroundPicker({
             : 'No default backgrounds available.'}
         </div>
       ) : (
-        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {currentItems.map((item) => (
             <BackgroundThumbnail
               key={item.url}
@@ -331,7 +331,7 @@ function BackgroundPickerModalContent({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
-      <div className="w-full max-w-lg bg-paper border-[3px] border-ink rounded-2xl shadow-[8px_8px_0_var(--color-ink)] overflow-hidden">
+      <div className="w-full max-w-lg max-h-[85dvh] flex flex-col bg-paper border-[3px] border-ink rounded-2xl shadow-[8px_8px_0_var(--color-ink)] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b-2 border-ink bg-cream">
           <h2 className="font-pixel text-lg text-ink">Choose Background</h2>
           <button
@@ -342,7 +342,7 @@ function BackgroundPickerModalContent({
             <X size={16} />
           </button>
         </div>
-        <div className="p-5">
+        <div className="p-5 min-h-0 overflow-y-auto">
           <BackgroundPicker
             selectedUrls={selected}
             onSelectionChange={setSelected}

@@ -9,7 +9,7 @@ interface WindowProps {
 
 export function Window({ title, children, className = '', onClose }: WindowProps) {
   return (
-    <div className={`w-full max-w-[1080px] max-h-[85vh] flex flex-col bg-paper/40 backdrop-blur-md border-[2.5px] border-ink rounded-[16px] shadow-[8px_8px_0_var(--color-ink)] overflow-hidden ${className}`}>
+    <div className={`w-full max-w-[1080px] max-h-[85dvh] flex flex-col bg-paper/40 backdrop-blur-md border-[2.5px] border-ink rounded-[16px] shadow-[8px_8px_0_var(--color-ink)] overflow-hidden ${className}`}>
       {/* Titlebar */}
       <div className="shrink-0 flex items-center justify-between px-3.5 py-2.5 bg-cream-deep/60 backdrop-blur-md border-b-[2.5px] border-ink">
         <div className="flex gap-[7px]">

@@ -484,25 +484,25 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Floating Player Bar */}
       <div className="p-4 sm:p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
-        <div className="bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-6 py-3 shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center gap-2 max-w-full">
-          <div className="flex items-center gap-3 sm:gap-6">
-            <div className="flex items-center gap-3">
+        <div className="w-[320px] sm:w-[380px] max-w-full bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-5 py-3.5 shadow-[6px_6px_0_var(--color-ink)] flex flex-col gap-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               {room.current_song_artwork ? (
                 <Image src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
               ) : (
                 <div className="w-10 h-10 rounded-full border-[2.5px] border-ink bg-gradient-to-br from-coral to-teal-3 shrink-0 shadow-[2px_2px_0_var(--color-ink)]"></div>
               )}
-              <div className="hidden sm:block">
-                <b className="block text-sm font-mono font-bold drop-shadow-sm leading-tight text-ink max-w-[150px] truncate">
+              <div className="hidden sm:block min-w-0">
+                <b className="block text-sm font-mono font-bold drop-shadow-sm leading-tight text-ink truncate">
                   {room.current_song_title || "Silence..."}
                 </b>
-                <span className="text-[10px] font-mono font-bold text-ink-soft/90 drop-shadow-sm">
+                <span className="text-[10px] font-mono font-bold text-ink-soft/90 drop-shadow-sm truncate block">
                   {room.current_song_artist || "Room Radio"}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 shrink-0">
               <button className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] opacity-50 cursor-not-allowed">
                 <SkipBack size={16} />
               </button>
@@ -521,9 +521,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
           {/* Song Progress Visualizer */}
           {currentVideoId && (
-            <div className="w-full max-w-[400px] px-1">
-              <SongProgressBar ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} onSeek={handleSeek} />
-            </div>
+            <SongProgressBar ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} onSeek={handleSeek} />
           )}
         </div>
       </div>
@@ -533,7 +531,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Sidebar Panel */}
       <div style={{ width: sidebarWidth }}
-        className={`fixed top-0 right-0 h-dvh w-full max-w-full sm:max-w-none bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
+        className={`fixed top-0 right-0 h-dvh w-full max-w-[100vw] sm:max-w-none bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
         <div onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize'; }}
           className="hidden sm:block absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
 
