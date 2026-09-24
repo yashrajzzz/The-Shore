@@ -1,4 +1,5 @@
 <div align="center">
-  <h2>Happy at The-Shore <3</h2>
-  <img src="./public/default-backgrounds/sunset.gif" alt="Happy at The-Shore <3">
+  <img src="public/the-shore-logo.png" alt="The Shore" width="280" />
+  <br/><br/>
+  <img src="public/default-backgrounds/sunset.gif" alt="sunset vibe" width="600" style="border-radius: 12px;" />
 </div>
