@@ -64,7 +64,7 @@ export function CreateRoomModal() {
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
           <div className="w-full max-w-md">
-            <Window title="Create New Room">
+            <Window title="Create New Room" onClose={() => setIsOpen(false)}>
               <div className="p-6">
                 <form onSubmit={onSubmit} className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1">

@@ -36,14 +36,17 @@ export function AddPlaylistToQueue({ roomId }: { roomId: string }) {
       return;
     }
     setAddedId(playlist.id);
-    setTimeout(() => setIsOpen(false), 900);
+    setTimeout(() => {
+      setIsOpen(false);
+      setAddedId(null);
+    }, 900);
   };
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={() => setIsOpen((v) => { if (!v) setAddedId(null); return !v; })}
         className="w-full flex items-center justify-center gap-1.5 bg-paper border-2 border-ink rounded-xl px-3 py-2 text-[11px] font-mono font-bold shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] transition-all"
       >
         <ListMusic size={13} /> Add a Playlist to Queue

@@ -22,7 +22,7 @@ export default function Home() {
                   Log In
                 </Button>
               </Link>
-              <Link href="/login" className="flex-1">
+              <Link href="/login?mode=signup" className="flex-1">
                 <Button variant="secondary" className="w-full py-3 text-sm text-ink rounded-full border-[2px] hover:bg-cream">
                   Sign Up
                 </Button>

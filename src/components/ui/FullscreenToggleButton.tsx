@@ -5,12 +5,16 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 
 export function FullscreenToggleButton() {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
 
   useEffect(() => {
+    setIsSupported(typeof document !== 'undefined' && Boolean(document.fullscreenEnabled || document.documentElement?.requestFullscreen));
     const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', handleChange);
     return () => document.removeEventListener('fullscreenchange', handleChange);
   }, []);
+
+  if (!isSupported) return null;
 
   const handleToggle = async () => {
     try {

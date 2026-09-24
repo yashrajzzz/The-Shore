@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import NextImage from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue } from '@/app/actions/rooms';
@@ -10,8 +11,7 @@ import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlaye
 import { SongSearch } from '@/components/ui/SongSearch';
 import { AddPlaylistToQueue } from '@/components/ui/AddPlaylistToQueue';
 import { SongProgressBar } from '@/components/ui/SongProgressBar';
-import Image from 'next/image';
-import { Image as ImageIcon, Music, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
 import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
@@ -70,6 +70,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
   // Sync State
   const [room, setRoom] = useState(initialRoom);
+  const currentVideoId = room.current_song_video_id || (typeof room.current_song_url === 'string' ? (room.current_song_url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) : undefined) || null;
+  const currentVideoIdRef = useRef<string | null>(currentVideoId);
+  useEffect(() => { currentVideoIdRef.current = currentVideoId; }, [currentVideoId]);
   const roomIdStr = String((initialRoom && (initialRoom as Room).id) ?? (initialRoom as Room).id ?? '');
   const userIdStr = String((user && (user as AppUser).id) ?? '');
   const userEmailStr = String((user && (user as AppUser).email) ?? '');
@@ -202,7 +205,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           roomChannel.send({
             type: 'broadcast',
             event: 'sync_position',
-            payload: { time: currentTime, videoId: currentVideoId }
+            payload: { time: currentTime, videoId: currentVideoIdRef.current }
           });
         }
       })
@@ -211,6 +214,15 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         // If we are a listener, sync to the host's position
         if (createdByRef.current !== userIdStr && typeof m.payload?.time === 'number' && ytPlayerRef.current) {
           ytPlayerRef.current.seekTo(m.payload.time);
+        }
+      })
+      .on('broadcast', { event: 'seek' }, (msg: unknown) => {
+        const m = msg as { payload?: { time?: number; startedAt?: string } };
+        if (typeof m.payload?.time === 'number') {
+          ytPlayerRef.current?.seekTo(m.payload.time);
+          if (m.payload.startedAt) {
+            setRoom(prev => ({ ...prev, current_song_started_at: m.payload!.startedAt }));
+          }
         }
       })
       .subscribe(async (status: string) => {
@@ -336,7 +348,13 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     const newStartedAt = new Date(Date.now() - seekTimeSeconds * 1000).toISOString();
     // Optimistically update local state
     setRoom(prev => ({ ...prev, current_song_started_at: newStartedAt }));
-    // Persist to DB so other participants pick it up via realtime
+    // Broadcast immediately so other listeners update instantly without waiting on DB WAL round-trip
+    roomChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'seek',
+      payload: { time: seekTimeSeconds, startedAt: newStartedAt }
+    });
+    // Persist to DB so late-joiners pick it up via realtime
     const supabase = (await import('@/utils/supabase/client')).createClient();
     await supabase.from('rooms').update({ current_song_started_at: newStartedAt }).eq('id', roomIdStr);
   }, [roomIdStr]);
@@ -417,10 +435,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       });
       navigator.mediaSession.setActionHandler('previoustrack', null);
     }
-  }, [room.is_playing, room.current_song_title, room.current_song_artist, room.current_song_artwork, handleTogglePlay]);
+  }, [room.is_playing, room.current_song_title, room.current_song_artist, room.current_song_artwork, handleTogglePlay, handleNextSong]);
 
 
-  const currentVideoId = room.current_song_video_id || (typeof room.current_song_url === 'string' ? (room.current_song_url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) : undefined) || null;
   const isHost = room.created_by === (user as AppUser).id;
   const startedAtVal: string | null = room.current_song_started_at == null ? null : (typeof room.current_song_started_at === 'string' ? room.current_song_started_at : new Date(Number(room.current_song_started_at)).toISOString());
 
@@ -437,7 +454,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Enable audio prompt for listeners (non-hosts) */}
       {!isHost && (
-        <EnableAudioPrompt roomId={roomIdStr} ytPlayerRef={ytPlayerRef} />
+        <EnableAudioPrompt roomId={roomIdStr} ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} />
       )}
 
       {/* Top Bar */}
@@ -455,7 +472,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         {room.current_song_title ? (
           <div className="text-center bg-ink/20 backdrop-blur-sm border-2 border-ink/30 px-6 py-4 rounded-2xl drop-shadow-md">
             {room.current_song_artwork && (
-            <Image src={room.current_song_artwork} alt="" width={80} height={80} unoptimized className="rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg object-cover" />
+            <NextImage src={room.current_song_artwork} alt="" width={80} height={80} unoptimized className="rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg object-cover" />
             )}
             <div className="text-[10px] text-paper uppercase tracking-widest font-mono font-bold mb-2">
               {isPreviewing ? (
@@ -488,7 +505,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {room.current_song_artwork ? (
-                <Image src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
+                <NextImage src={room.current_song_artwork} alt="" width={40} height={40} unoptimized className="rounded-full border-[2.5px] border-ink shrink-0 shadow-[2px_2px_0_var(--color-ink)] object-cover" />
               ) : (
                 <div className="w-10 h-10 rounded-full border-[2.5px] border-ink bg-gradient-to-br from-coral to-teal-3 shrink-0 shadow-[2px_2px_0_var(--color-ink)]"></div>
               )}

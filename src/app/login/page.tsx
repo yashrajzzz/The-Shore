@@ -8,11 +8,11 @@ import { Suspense } from "react";
 import { CheckCircle2 } from "lucide-react";
 
 function LoginForm() {
-  const [isLogin, setIsLogin] = useState(true);
+  const searchParams = useSearchParams();
+  const [isLogin, setIsLogin] = useState(() => searchParams.get('mode') !== 'signup');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [signupSuccess, setSignupSuccess] = useState(false);
-  const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/lobby';
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {

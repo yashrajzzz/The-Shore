@@ -54,7 +54,7 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
           <div className="w-full max-w-md">
-            <Window title="Invite Friends">
+            <Window title="Invite Friends" onClose={() => setIsOpen(false)}>
               <div className="p-6">
                 <div className="mb-4 text-sm font-mono text-ink-soft">
                   Share this link to invite others{roomName ? ` to ${roomName}` : ''}:
@@ -85,17 +85,21 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
                 {/* Share buttons */}
                 <div className="mt-5 flex flex-wrap gap-2">
                   {/* WhatsApp */}
-                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
-                    <button className="flex items-center gap-1.5 bg-[#25D366] text-white border-[2px] border-ink rounded-lg px-3 py-2 text-xs font-mono font-bold shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] transition-all">
-                      <MessageCircle size={14} /> WhatsApp
-                    </button>
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 bg-[#25D366] text-white border-[2px] border-ink rounded-lg px-3 py-2 text-xs font-mono font-bold shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] transition-all"
+                  >
+                    <MessageCircle size={14} /> WhatsApp
                   </a>
 
                   {/* Email */}
-                  <a href={emailUrl} className="inline-block">
-                    <button className="flex items-center gap-1.5 bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-xs font-mono font-bold shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] transition-all">
-                      <Mail size={14} /> Email
-                    </button>
+                  <a
+                    href={emailUrl}
+                    className="flex items-center gap-1.5 bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-xs font-mono font-bold shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] transition-all"
+                  >
+                    <Mail size={14} /> Email
                   </a>
 
                   {/* Native Share (mobile) */}

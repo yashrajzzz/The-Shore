@@ -381,6 +381,7 @@ export async function destroyRoom(roomId: string) {
     .from('rooms')
     .delete()
     .eq('id', roomId)
+    .eq('created_by', user.id)
 
   if (error) return { error: error.message }
   

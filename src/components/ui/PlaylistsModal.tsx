@@ -245,7 +245,11 @@ export function PlaylistsModal() {
   const handleDelete = async (playlistId: string) => {
     if (!confirm('Delete this playlist? This cannot be undone.')) return;
     setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-    await deletePlaylist(playlistId);
+    const res = await deletePlaylist(playlistId);
+    if (res?.error) {
+      setError(res.error);
+      await load();
+    }
   };
 
   // Stable identity (only changes when switching playlists) — PlaylistDetail's

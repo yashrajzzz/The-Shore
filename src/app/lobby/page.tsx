@@ -1,6 +1,4 @@
-import { Window } from "@/components/ui/Window";
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
 import { CreateRoomModal } from "@/components/ui/CreateRoomModal";
 import { PlaylistsModal } from "@/components/ui/PlaylistsModal";
 import { DeleteRoomButton } from "@/components/ui/DeleteRoomButton";

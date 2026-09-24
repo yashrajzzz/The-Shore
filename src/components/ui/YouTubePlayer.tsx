@@ -141,13 +141,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       const now = Date.now();
       const diffSeconds = (now - startTime) / 1000;
 
-      if (diffSeconds > MIN_SYNC_DIFF_SECONDS && diffSeconds < 7200) {
+      if (diffSeconds >= 0 && diffSeconds < 7200) {
         // Only sync if within 2 hours and player supports seekTo
         if (typeof playerRef.current?.seekTo === 'function') {
-          // Prevent jarring double-seeks from realtime echoes:
-          // If we're already very close to the target sync time, do nothing.
           const current = playerRef.current.getCurrentTime() || 0;
+          // Prevent jarring double-seeks: if already within 2 seconds of target, do nothing
           if (Math.abs(current - diffSeconds) < 2) {
+            return;
+          }
+
+          // Initial load jitter guard: if the player is just starting (current < 2s)
+          // and startedAt is within the 8s load window, don't skip the track's intro.
+          // If the player is already further in (current >= 2s), this is a deliberate rewind.
+          if (current < 2 && diffSeconds <= MIN_SYNC_DIFF_SECONDS) {
             return;
           }
           
@@ -277,7 +283,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           },
         },
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isApiReady, videoId]);
 
     // Handle play/pause changes

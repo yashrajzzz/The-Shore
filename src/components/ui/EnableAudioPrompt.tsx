@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import type { YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
 
-export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytPlayerRef: React.RefObject<YouTubePlayerHandle | null> }) {
+export function EnableAudioPrompt({ roomId, ytPlayerRef, isPlaying = false }: { roomId: string; ytPlayerRef: React.RefObject<YouTubePlayerHandle | null>; isPlaying?: boolean }) {
   const storageKey = `shore_audio_enabled_${roomId}`;
 
   // Start hidden to match SSR output; show on client if sessionStorage says so
@@ -22,15 +22,22 @@ export function EnableAudioPrompt({ roomId, ytPlayerRef }: { roomId: string; ytP
 
   const handleEnable = async () => {
     try {
-      // Attempt to play then pause to prime autoplay permissions
-      if (ytPlayerRef?.current?.playVideo) {
-        try {
-          // don't await to avoid blocking if browser blocks; still a user gesture
-          ytPlayerRef.current.playVideo();
-        } catch {
-          /* play may be blocked but the user gesture will allow it */
+      const player = ytPlayerRef?.current;
+      if (player) {
+        if (isPlaying) {
+          try {
+            player.unMute();
+            player.playVideo();
+            player.resync();
+          } catch {}
+        } else {
+          try {
+            player.playVideo();
+          } catch {}
+          try {
+            player.pauseVideo();
+          } catch {}
         }
-        try { ytPlayerRef.current.pauseVideo(); } catch {}
       }
       if (typeof window !== 'undefined') sessionStorage.setItem(storageKey, '1');
     } finally {
