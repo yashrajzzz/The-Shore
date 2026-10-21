@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-cream: #F1EAD9;
+  --color-cream: #FFF2C6;
   --color-cream-deep: #E3D8BE;
   --color-paper: #F9F4E8;
   --color-teal-1: #D3F0EC;
@@ -109,4 +109,26 @@ body {
 .playlist-scroll::-webkit-scrollbar-thumb:hover,
 .queue-scroll::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-ink);
+}
+
+/* Landing hero: scroll is driven by the cards, so the native scrollbar is hidden. */
+main:has(.hero-root) {
+  scrollbar-width: none;
+}
+
+main:has(.hero-root)::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes shore-drift {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+.shore-drift {
+  animation: shore-drift 24s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shore-drift { animation: none; }
 }

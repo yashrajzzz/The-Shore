@@ -1,36 +1,21 @@
-import Link from "next/link";
-import { Window } from "@/components/ui/Window";
-import { Button } from "@/components/ui/Button";
+import { Footer } from "@/components/ui/Footer";
+import { MobileIntro } from "@/components/ui/MobileIntro";
+import { ShoreHero } from "@/components/ui/ShoreHero";
+import { SmoothScroll } from "@/components/ui/SmoothScroll";
+import { StickyHero } from "@/components/ui/StickyHero";
 
 export default function Home() {
   return (
-    <div className="flex-1 flex items-center justify-center p-6">
-      {/* Background decoration matching prototype */}
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-5 mix-blend-multiply bg-[radial-gradient(var(--color-ink)_1px,transparent_1px)] bg-[size:3px_3px]"></div>
-      
-      <div className="relative z-10 w-full max-w-md">
-        <Window title="The Shore — welcome">
-          <div className="p-8 flex flex-col items-center text-center gap-6">
-            <h1 className="font-pixel text-4xl">Join the Vibe</h1>
-            <p className="text-sm text-ink-soft">
-              Listen to music in sync with up to 10 friends. Custom backgrounds, real-time chat, and shared queues.
-            </p>
-            
-            <div className="flex gap-4 w-full mt-4">
-              <Link href="/login" className="flex-1">
-                <Button variant="primary" className="w-full py-3 text-sm">
-                  Log In
-                </Button>
-              </Link>
-              <Link href="/login?mode=signup" className="flex-1">
-                <Button variant="secondary" className="w-full py-3 text-sm text-ink rounded-full border-[2px] hover:bg-cream">
-                  Sign Up
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </Window>
+    <>
+      <SmoothScroll />
+      <ShoreHero />
+      <div className="hidden md:block">
+        <StickyHero />
       </div>
-    </div>
+      <div className="md:hidden">
+        <MobileIntro />
+      </div>
+      <Footer />
+    </>
   );
 }
