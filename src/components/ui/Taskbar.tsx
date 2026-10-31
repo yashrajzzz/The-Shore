@@ -2,9 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 
 export function Taskbar() {
   const [time, setTime] = useState<string>('');
+  const isHome = usePathname() === '/';
 
   useEffect(() => {
     const updateClock = () => {
@@ -22,7 +24,7 @@ export function Taskbar() {
   }, []);
 
   return (
-    <div className="relative z-50 flex items-center justify-between px-[18px] py-[9px] bg-cream/40 backdrop-blur-md border-b-[2.5px] border-ink">
+    <div className={`relative z-50 flex items-center justify-between px-[18px] pb-[9px] ${isHome ? 'pt-4' : 'pt-[9px]'} bg-cream/40 backdrop-blur-md ${isHome ? '' : 'border-b-[2.5px] border-ink'}`}>
       <div className="flex items-center gap-5">
         <Link href="/" className="flex items-center gap-3">
           <Image src="/bunny-favicon.png" alt="Bunny Logo" width={48} height={48} className="object-contain" />
