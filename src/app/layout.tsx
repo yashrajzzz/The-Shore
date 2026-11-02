@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Mono, VT323, Press_Start_2P } from "next/font/google";
+import { Space_Mono, VT323, Press_Start_2P, Special_Elite } from "next/font/google";
 import "./globals.css";
 
 const spaceMono = Space_Mono({
@@ -16,6 +16,12 @@ const vt323 = VT323({
 
 const pressStart = Press_Start_2P({
   variable: "--font-press-start",
+  subsets: ["latin"],
+  weight: ["400"],
+});
+
+const specialElite = Special_Elite({
+  variable: "--font-special-elite",
   subsets: ["latin"],
   weight: ["400"],
 });
@@ -59,7 +65,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${spaceMono.variable} ${vt323.variable} ${pressStart.variable} h-full antialiased`}
+      className={`${spaceMono.variable} ${vt323.variable} ${pressStart.variable} ${specialElite.variable} h-full antialiased`}
     >
       <body className="h-full flex flex-col relative overflow-hidden">
         <GlobalBackground />

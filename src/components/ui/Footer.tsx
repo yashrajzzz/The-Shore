@@ -17,7 +17,7 @@ export function Footer() {
               the shore
             </span>
           </div>
-          <p className="font-serif text-sm italic leading-relaxed text-cream/75">
+          <p className="font-handwritten text-base leading-relaxed text-cream/75">
             a place where the music never stops. queue a song, share the aux, and let the night drift in.
           </p>
         </div>
