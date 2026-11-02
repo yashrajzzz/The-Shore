@@ -38,7 +38,7 @@ export function ShoreHero() {
           the shore
         </h1>
 
-        <p className="max-w-md font-handwritten text-lg leading-relaxed text-cream/90 sm:text-xl">
+        <p className="max-w-md font-serif text-base italic leading-relaxed text-cream/90 sm:text-lg">
           a place where the music never stops. queue a song, share the aux, and let the night drift in
           — together, wherever you are.
         </p>

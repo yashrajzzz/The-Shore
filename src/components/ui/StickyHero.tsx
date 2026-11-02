@@ -5,39 +5,17 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRef } from 'react';
 
+import { Button } from './Button';
+
 const CARDS = [
-  {
-    src: '/hero/hero-1.webp',
-    alt: 'Music is better together',
-    line1: 'music is better',
-    line2: 'together.',
-  },
-  {
-    src: '/hero/hero-2.webp',
-    alt: 'Hero scene 2',
-    line1: 'every song tells',
-    line2: 'a story.',
-  },
-  {
-    src: '/hero/hero-3.webp',
-    alt: 'Hero scene 3',
-    line1: 'share the aux,',
-    line2: 'own the night.',
-  },
-  {
-    src: '/hero/hero-4.webp',
-    alt: 'Hero scene 4',
-    line1: 'the queue never',
-    line2: 'sleeps.',
-  },
-  {
-    src: '/hero/hero-5.webp',
-    alt: 'Your next song starts here',
-    line1: 'your next song',
-    line2: 'starts here.',
-  },
+  { src: '/hero/hero-1.webp', alt: 'Music is better together' },
+  { src: '/hero/hero-2.webp', alt: 'Hero scene 2' },
+  { src: '/hero/hero-3.webp', alt: 'Hero scene 3' },
+  { src: '/hero/hero-4.webp', alt: 'Hero scene 4' },
+  { src: '/hero/hero-5.webp', alt: 'Your next song starts here' },
 ];
 
 export function StickyHero() {
@@ -109,7 +87,7 @@ export function StickyHero() {
               ref={(el) => {
                 cardRefs.current[i] = el;
               }}
-              className="absolute inset-0 overflow-hidden rounded-4xl will-change-transform"
+              className={`absolute inset-0 overflow-hidden rounded-4xl will-change-transform ${i > 0 ? 'invisible' : ''}`}
             >
               {/* Phones: the art is landscape with its caption baked in, so show it whole over a blurred copy. */}
               <Image
@@ -124,27 +102,31 @@ export function StickyHero() {
                 src={card.src}
                 alt={card.alt}
                 fill
-                preload={i === 0}
+                priority={i === 0}
                 unoptimized
-                loading={i === 0 ? 'eager' : 'lazy'}
+                loading="eager"
                 sizes="100vw"
                 className="object-contain md:object-cover md:object-[50%_30%]"
               />
-              {/* Centered written text on every card */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-6 text-center">
-                <span
-                  className="font-handwritten leading-none text-white"
-                  style={{ fontSize: 'clamp(2.5rem, 6vw, 5rem)', textShadow: '2px 3px 12px rgba(0,0,0,0.75), 0 1px 3px rgba(0,0,0,0.9)' }}
-                >
-                  {card.line1}
-                </span>
-                <span
-                  className="font-handwritten leading-none text-white"
-                  style={{ fontSize: 'clamp(2.5rem, 6vw, 5rem)', textShadow: '2px 3px 12px rgba(0,0,0,0.75), 0 1px 3px rgba(0,0,0,0.9)' }}
-                >
-                  {card.line2}
-                </span>
-              </div>
+              {i === CARDS.length - 1 && (
+                <div className="absolute inset-x-0 bottom-0 flex items-end justify-center bg-gradient-to-t from-black/50 to-transparent px-4 pb-[6%] pt-16">
+                  <div className="flex w-full max-w-xs gap-3 sm:max-w-sm sm:gap-4">
+                    <Link href="/login" className="flex-1">
+                      <Button variant="primary" className="w-full py-2 text-xs sm:py-3 sm:text-sm">
+                        Log In
+                      </Button>
+                    </Link>
+                    <Link href="/login?mode=signup" className="flex-1">
+                      <Button
+                        variant="secondary"
+                        className="w-full rounded-full border-[2px] py-2 text-xs text-ink hover:bg-cream sm:py-3 sm:text-sm"
+                      >
+                        Sign Up
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

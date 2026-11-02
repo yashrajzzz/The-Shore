@@ -26,7 +26,7 @@ export function MobileIntro() {
           <div className="min-w-0">
             <p className="font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-ink/60">step {i + 1}</p>
             <p className="font-pixel text-[26px] leading-none text-ink">{s.title}</p>
-            <p className="mt-1 font-handwritten text-[15px] leading-snug text-ink-soft">{s.body}</p>
+            <p className="mt-1 font-serif text-[13px] italic leading-snug text-ink-soft">{s.body}</p>
           </div>
         </div>
       ))}

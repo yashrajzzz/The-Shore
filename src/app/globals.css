@@ -18,7 +18,6 @@
   --font-mono: var(--font-space-mono), monospace;
   --font-pixel: var(--font-vt323), monospace;
   --font-arcade: var(--font-press-start), monospace;
-  --font-handwritten: var(--font-special-elite), Georgia, serif;
 }
 
 :root {
