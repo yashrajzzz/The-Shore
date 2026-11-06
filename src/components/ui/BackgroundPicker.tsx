@@ -12,6 +12,7 @@ import {
   MAX_BACKGROUNDS_PER_FOLDER,
   isAnimatedBackground,
   isVideoBackground,
+  backgroundPoster,
   type BackgroundDevice,
   type BackgroundItem,
 } from '@/utils/backgrounds';
@@ -103,10 +104,10 @@ function BackgroundThumbnail({
       }`}
     >
       <LazyMount className="absolute inset-0">
-        {isVideo ? (
+        {isVideo && !backgroundPoster(item.url) ? (
           <video src={`${item.url}#t=0.1`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
         ) : (
-          <Image src={item.url} alt={item.name || 'Background'} fill unoptimized loading="lazy" sizes="160px" className="object-cover" />
+          <Image src={backgroundPoster(item.url) ?? item.url} alt={item.name || 'Background'} fill unoptimized loading="lazy" sizes="160px" className="object-cover" />
         )}
       </LazyMount>
 
@@ -149,10 +150,10 @@ function SelectedStrip({ urls, onRemove }: { urls: string[]; onRemove: (url: str
     <div className="flex gap-2 overflow-x-auto pb-1 thin-scroll">
       {urls.map((url) => (
         <div key={url} className="relative w-14 h-10 shrink-0 rounded-md overflow-hidden border-2 border-ink bg-ink/10">
-          {isVideoBackground(url) ? (
+          {isVideoBackground(url) && !backgroundPoster(url) ? (
             <video src={`${url}#t=0.1`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
           ) : (
-            <Image src={url} alt="Selected background" fill unoptimized sizes="56px" className="object-cover" />
+            <Image src={backgroundPoster(url) ?? url} alt="Selected background" fill unoptimized sizes="56px" className="object-cover" />
           )}
           <button
             type="button"
