@@ -67,7 +67,7 @@ async function tryInvidiousInstance(
         `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
     });
 
-    if (results.length >= 5) break;
+    if (results.length >= 8) break;
   }
 
   if (results.length === 0) {
@@ -184,10 +184,10 @@ async function scrapeYouTubeSearch(query: string): Promise<YouTubeResult[]> {
           renderer.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || '',
       });
 
-      if (results.length >= 5) break;
+      if (results.length >= 8) break;
     }
 
-    if (results.length >= 5) break;
+    if (results.length >= 8) break;
   }
 
   return results;

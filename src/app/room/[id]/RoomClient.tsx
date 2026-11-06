@@ -15,6 +15,7 @@ import { Image as ImageIcon, MessageSquare, LogOut, SkipBack, Play, Pause, SkipF
 import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
+import { RoomClock } from '@/components/ui/RoomClock';
 import { useRoomTransition } from '@/components/ui/RoomTransition';
 
 type Room = {
@@ -453,13 +454,23 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       )}
 
       {/* Top Bar */}
-      <div className="flex justify-end px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-6 pointer-events-auto shrink-0">
+      <div className="flex items-center justify-end sm:justify-between gap-3 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-6 pointer-events-auto shrink-0">
+        <RoomClock />
+        <div className="flex items-center gap-2.5 sm:gap-3">
+        <button onClick={() => { setIsSidebarOpen(true); setActiveTab('backgrounds'); }}
+          aria-label="Change background"
+          title="Change background"
+          className="h-11 sm:h-12 px-3 sm:px-4 bg-coral/90 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex items-center gap-2 font-mono text-xs font-bold hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] transition-all z-[60]">
+          <ImageIcon size={18} strokeWidth={2.25} />
+          <span className="hidden sm:inline">Backgrounds</span>
+        </button>
         <button onClick={() => setIsSidebarOpen(true)}
           className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
         </button>
+        </div>
       </div>
 
       {/* Center Now Playing */}
@@ -484,8 +495,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             <div className="bg-paper/40 backdrop-blur-xl border-2 border-ink p-6 sm:p-8 rounded-2xl shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center max-w-sm text-center">
               <div className="mb-4"><ImageIcon size={48} className="text-ink/80" /></div>
               <h3 className="font-pixel text-xl text-ink mb-2">Set the Vibe!</h3>
-              <p className="text-xs font-mono text-ink-soft mb-6">Pick your own background in Settings. Only you see it.</p>
-              <button onClick={() => { setIsSidebarOpen(true); setActiveTab('settings'); }}
+              <p className="text-xs font-mono text-ink-soft mb-6">Pick your own background. Only you see it.</p>
+              <button onClick={() => { setIsSidebarOpen(true); setActiveTab('backgrounds'); }}
                 className="bg-coral border-2 border-ink rounded-lg px-6 py-3 text-sm font-bold font-mono shadow-[3px_3px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)] transition-all flex items-center gap-2">
                 <Plus size={16} /> Add Background
               </button>
@@ -554,9 +565,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
         {/* Tabs */}
         <div className="flex border-b-[2.5px] border-ink bg-cream/50 shrink-0">
-          {['listeners', 'queue', 'chat', 'settings'].map(tab => (
+          {['listeners', 'queue', 'chat', 'backgrounds', 'settings'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 text-center py-3.5 sm:py-3 text-[10px] uppercase font-mono border-r-[2.5px] border-ink last:border-r-0 transition-colors ${activeTab === tab ? 'bg-paper font-bold shadow-[inset_0_3px_0_var(--color-ink)]' : 'text-ink-soft hover:bg-paper/50'}`}>
+              className={`flex-1 min-w-0 text-center py-3.5 sm:py-3 ${tab === 'backgrounds' ? 'text-[9px]' : 'text-[10px]'} uppercase font-mono border-r-[2.5px] border-ink last:border-r-0 transition-colors ${activeTab === tab ? 'bg-paper font-bold shadow-[inset_0_3px_0_var(--color-ink)]' : 'text-ink-soft hover:bg-paper/50'}`}>
               {tab === 'listeners' ? `${listeners.length} LI` : tab}
             </button>
           ))}
@@ -655,7 +666,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             </div>
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'backgrounds' && (
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
                 <h3 className="font-pixel text-lg text-ink mb-2">My Background</h3>
@@ -679,6 +690,11 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                   <span className="text-xs font-mono font-bold">60s</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
               <div className="mt-auto pt-6 border-t-[2.5px] border-ink border-dashed">
                 <button onClick={async () => {
                     if (isHost) {

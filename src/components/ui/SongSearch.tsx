@@ -165,7 +165,7 @@ export function SongSearch({
     setError('');
 
     try {
-      const res = await fetch(`/api/itunes?q=${encodeURIComponent(term)}&limit=12`);
+      const res = await fetch(`/api/itunes?q=${encodeURIComponent(term)}&limit=20`);
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
       setResults(data.results || []);
@@ -233,13 +233,30 @@ export function SongSearch({
       track.trackName,
     ].filter((q, i, arr) => q.trim() && arr.indexOf(q) === i);
 
+    type YtHit = { videoId: string; title?: string; duration?: number | null };
+    const wantSec = track.trackTimeMillis ? track.trackTimeMillis / 1000 : null;
+    const wantTitle = track.trackName.toLowerCase();
+    // Prefer the video whose length matches the song (skips intros/lives/loops),
+    // and avoid lyric/live/remix/cover uploads unless that's what was searched.
+    const pick = (hits: YtHit[]): YtHit => {
+      const scored = hits.map((h, i) => {
+        let score = -i * 2;
+        if (wantSec && h.duration) score -= Math.min(Math.abs(h.duration - wantSec), 120) / 4;
+        const t = (h.title || '').toLowerCase();
+        if (/(live|remix|cover|reaction|slowed|reverb|sped up|8d|karaoke|instrumental)/.test(t) && !/(live|remix|cover|reaction|slowed|reverb|sped up|8d|karaoke|instrumental)/.test(wantTitle)) score -= 12;
+        if (/official/.test(t)) score += 3;
+        return { h, score };
+      });
+      return scored.sort((a, b) => b.score - a.score)[0].h;
+    };
+
     let topResult: { videoId: string } | null = null;
     for (const searchQuery of queryCandidates) {
       const ytRes = await fetch(`/api/youtube-search?q=${encodeURIComponent(searchQuery)}`);
       if (!ytRes.ok) continue;
       const ytData = await ytRes.json();
       if (ytData.results?.length > 0) {
-        topResult = ytData.results[0];
+        topResult = pick(ytData.results as YtHit[]);
         break;
       }
     }
