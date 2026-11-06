@@ -48,12 +48,12 @@ function LoginForm() {
 
   if (signupSuccess) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
         <div className="fixed inset-0 z-0 pointer-events-none opacity-5 mix-blend-multiply bg-[radial-gradient(var(--color-ink)_1px,transparent_1px)] bg-[size:3px_3px]"></div>
 
         <div className="relative z-10 w-full max-w-sm">
           <Window title="Authentication">
-            <div className="p-8 flex flex-col items-center text-center gap-4">
+            <div className="p-5 sm:p-8 flex flex-col items-center text-center gap-4">
               <div className="w-14 h-14 rounded-full bg-teal-2 border-2 border-ink flex items-center justify-center shadow-[3px_3px_0_var(--color-ink)]">
                 <CheckCircle2 size={28} className="text-ink" />
               </div>
@@ -77,12 +77,12 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6">
+    <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
       <div className="fixed inset-0 z-0 pointer-events-none opacity-5 mix-blend-multiply bg-[radial-gradient(var(--color-ink)_1px,transparent_1px)] bg-[size:3px_3px]"></div>
 
       <div className="relative z-10 w-full max-w-sm">
         <Window title="Authentication">
-          <div className="p-8">
+          <div className="p-5 sm:p-8">
             <h1 className="font-pixel text-2xl text-center mb-6">Enter The Shore</h1>
 
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -94,7 +94,7 @@ function LoginForm() {
                     name="display_name"
                     type="text"
                     required={!isLogin}
-                    className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
+                    className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2.5 text-base sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
                     placeholder="e.g. DJ Cool"
                   />
                 </div>
@@ -107,7 +107,7 @@ function LoginForm() {
                   name="email"
                   type="email"
                   required
-                  className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
+                  className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2.5 text-base sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
                   placeholder="you@example.com"
                 />
               </div>
@@ -120,7 +120,7 @@ function LoginForm() {
                   type="password"
                   required
                   minLength={6}
-                  className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
+                  className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2.5 text-base sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2"
                   placeholder="••••••••"
                 />
                 {!isLogin && (

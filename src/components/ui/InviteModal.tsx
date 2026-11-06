@@ -1,5 +1,6 @@
 'use client';
 
+import { Portal } from './Portal';
 import { useState, useRef } from 'react';
 import { Window } from './Window';
 import { Button } from './Button';
@@ -52,7 +53,7 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
       </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
+        <Portal className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
           <div className="w-full max-w-md">
             <Window title="Invite Friends" onClose={() => setIsOpen(false)}>
               <div className="p-6">
@@ -123,7 +124,7 @@ export function InviteModal({ roomId, roomName }: { roomId: string; roomName?: s
               </div>
             </Window>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   );

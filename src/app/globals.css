@@ -132,3 +132,8 @@ main:has(.hero-root)::-webkit-scrollbar {
 @media (prefers-reduced-motion: reduce) {
   .shore-drift { animation: none; }
 }
+
+@keyframes bg-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

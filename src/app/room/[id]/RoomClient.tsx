@@ -3,8 +3,8 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import NextImage from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { updateRoomBackgrounds, addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue } from '@/app/actions/rooms';
-import { setGlobalBackground } from '@/components/ui/GlobalBackground';
+import { addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue } from '@/app/actions/rooms';
+import { setGlobalBackground, usePersonalBackground } from '@/components/ui/GlobalBackground';
 import { BackgroundPicker } from '@/components/ui/BackgroundPicker';
 import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
 import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlayer';
@@ -66,7 +66,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
 
   // Settings State
-  const [timerInterval, setTimerInterval] = useState(30000);
+  // Backgrounds are personal (this device only), not shared by the host.
+  const { urls: myBackgrounds, interval: timerInterval } = usePersonalBackground();
 
   // Sync State
   const [room, setRoom] = useState(initialRoom);
@@ -81,7 +82,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   // putting room.created_by in the realtime useEffect dep array which would
   // cause subscription churn on every room state update.
   const createdByRef = useRef(initialRoom.created_by);
-  const bgCount = Array.isArray(room.background_urls) ? room.background_urls.length : 0;
+  const bgCount = myBackgrounds.length;
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
 
@@ -244,20 +245,14 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomIdStr, userIdStr, userEmailStr]);
 
-  useEffect(() => {
-    if (Array.isArray(room.background_urls) && room.background_urls.length > 0) setGlobalBackground(room.background_urls as string[], timerInterval);
-  }, [room.background_urls, timerInterval]);
-
   const handleTimerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = parseInt(e.target.value) * 1000;
-    setTimerInterval(v);
-    if (Array.isArray(room.background_urls)) setGlobalBackground(room.background_urls as string[], v);
+    const ms = parseInt(e.target.value) * 1000;
+    if (myBackgrounds.length > 0) setGlobalBackground(myBackgrounds, ms);
   };
 
-  const handleBackgroundSelectionChange = async (urls: string[]) => {
-    setRoom({ ...room, background_urls: urls });
+  // Your own background: applies instantly, saved on this device only.
+  const handleBackgroundSelectionChange = (urls: string[]) => {
     setGlobalBackground(urls, timerInterval);
-    await updateRoomBackgrounds(roomIdStr, urls);
   };
 
   const handleAddToQueue = useCallback(async (song: { videoId: string; title: string; artist: string; artwork: string; duration: number }) => {
@@ -458,9 +453,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       )}
 
       {/* Top Bar */}
-      <div className="flex justify-end p-4 sm:p-6 pointer-events-auto shrink-0">
+      <div className="flex justify-end px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-6 pointer-events-auto shrink-0">
         <button onClick={() => setIsSidebarOpen(true)}
-          className="w-12 h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
+          className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
@@ -470,7 +465,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       {/* Center Now Playing */}
       <div className="flex-1 flex flex-col items-center justify-center pointer-events-auto px-4">
         {room.current_song_title ? (
-          <div className="text-center bg-ink/20 backdrop-blur-sm border-2 border-ink/30 px-6 py-4 rounded-2xl drop-shadow-md">
+          <div className="text-center bg-ink/20 backdrop-blur-sm border-2 border-ink/30 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl drop-shadow-md max-w-full">
             {room.current_song_artwork && (
             <NextImage src={room.current_song_artwork} alt="" width={80} height={80} unoptimized className="rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg object-cover" />
             )}
@@ -479,17 +474,17 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                 <span className="text-coral">paused · previewing another song</span>
               ) : 'now playing'}
             </div>
-            <div className={`font-pixel text-2xl sm:text-3xl md:text-4xl leading-snug max-w-2xl ${isPreviewing ? 'text-paper/40' : 'text-paper'}`}>{room.current_song_title}</div>
+            <div className={`font-pixel text-2xl sm:text-3xl md:text-4xl leading-snug max-w-2xl break-words ${isPreviewing ? 'text-paper/40' : 'text-paper'}`}>{room.current_song_title}</div>
             {room.current_song_artist && (
               <div className="text-sm text-paper/70 font-mono mt-1">{room.current_song_artist}</div>
             )}
           </div>
         ) : (
           (bgCount === 0) && (
-            <div className="bg-paper/40 backdrop-blur-xl border-2 border-ink p-8 rounded-2xl shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center max-w-sm text-center">
+            <div className="bg-paper/40 backdrop-blur-xl border-2 border-ink p-6 sm:p-8 rounded-2xl shadow-[6px_6px_0_var(--color-ink)] flex flex-col items-center max-w-sm text-center">
               <div className="mb-4"><ImageIcon size={48} className="text-ink/80" /></div>
               <h3 className="font-pixel text-xl text-ink mb-2">Set the Vibe!</h3>
-              <p className="text-xs font-mono text-ink-soft mb-6">Pick a background from defaults or your library in Settings.</p>
+              <p className="text-xs font-mono text-ink-soft mb-6">Pick your own background in Settings. Only you see it.</p>
               <button onClick={() => { setIsSidebarOpen(true); setActiveTab('settings'); }}
                 className="bg-coral border-2 border-ink rounded-lg px-6 py-3 text-sm font-bold font-mono shadow-[3px_3px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[2px_2px_0_var(--color-ink)] transition-all flex items-center gap-2">
                 <Plus size={16} /> Add Background
@@ -500,8 +495,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       </div>
 
       {/* Floating Player Bar */}
-      <div className="p-4 sm:p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
-        <div className="w-[320px] sm:w-[380px] max-w-full bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-5 py-3.5 shadow-[6px_6px_0_var(--color-ink)] flex flex-col gap-3.5">
+      <div className="px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
+        <div className="w-full sm:w-[380px] max-w-[420px] bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-5 py-3.5 shadow-[6px_6px_0_var(--color-ink)] flex flex-col gap-3.5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {room.current_song_artwork ? (
@@ -509,7 +504,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
               ) : (
                 <div className="w-10 h-10 rounded-full border-[2.5px] border-ink bg-gradient-to-br from-coral to-teal-3 shrink-0 shadow-[2px_2px_0_var(--color-ink)]"></div>
               )}
-              <div className="hidden sm:block min-w-0">
+              <div className="block min-w-0">
                 <b className="block text-sm font-mono font-bold drop-shadow-sm leading-tight text-ink truncate">
                   {room.current_song_title || "Silence..."}
                 </b>
@@ -520,7 +515,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] opacity-50 cursor-not-allowed">
+              <button className="w-10 h-10 sm:w-9 sm:h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] opacity-50 cursor-not-allowed">
                 <SkipBack size={16} />
               </button>
               <button onClick={handleTogglePlay}
@@ -530,7 +525,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                 {room.is_playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
               </button>
               <button onClick={handleNextSong}
-                className="w-9 h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)]">
+                className="w-10 h-10 sm:w-9 sm:h-9 rounded-full border-[2.5px] border-ink bg-paper flex items-center justify-center hover:bg-teal-1 text-xs shadow-[2px_2px_0_var(--color-ink)] transition-transform hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)]">
                 <SkipForward size={16} />
               </button>
             </div>
@@ -547,21 +542,21 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       {isSidebarOpen && <div className="fixed inset-0 z-[60] bg-ink/10 pointer-events-auto" onClick={() => setIsSidebarOpen(false)}></div>}
 
       {/* Sidebar Panel */}
-      <div style={{ width: sidebarWidth }}
-        className={`fixed top-0 right-0 h-dvh w-full max-w-[100vw] sm:max-w-none bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
+      <div style={{ ["--sb-w" as string]: `${sidebarWidth}px` }}
+        className={`fixed top-0 right-0 h-dvh w-full sm:w-[var(--sb-w)] max-w-[100vw] sm:max-w-none bg-paper/70 backdrop-blur-2xl border-l-[3px] border-ink flex flex-col pointer-events-auto transition-transform duration-300 ease-out z-[70] will-change-transform ${isSidebarOpen ? 'translate-x-0 shadow-[-10px_0_30px_rgba(0,0,0,0.2)]' : 'translate-x-full'}`}>
         <div onMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'col-resize'; }}
           className="hidden sm:block absolute top-0 bottom-0 left-[-2px] w-2 cursor-col-resize hover:bg-coral/40 z-[80] transition-colors" />
 
-        <div className="shrink-0 flex items-center justify-between px-6 py-5 border-b-[2.5px] border-ink bg-cream/50">
-          <h2 className="font-pixel text-xl text-ink leading-none truncate max-w-[200px]">{String(room.name)}</h2>
-          <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-full border-2 border-ink bg-coral flex items-center justify-center font-bold text-xs shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] shrink-0"><X size={16} /></button>
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:py-5 border-b-[2.5px] border-ink bg-cream/50">
+          <h2 className="font-pixel text-xl text-ink leading-none truncate max-w-[60vw] sm:max-w-[200px]">{String(room.name)}</h2>
+          <button onClick={() => setIsSidebarOpen(false)} className="w-10 h-10 sm:w-8 sm:h-8 rounded-full border-2 border-ink bg-coral flex items-center justify-center font-bold text-xs shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)] shrink-0"><X size={16} /></button>
         </div>
 
         {/* Tabs */}
         <div className="flex border-b-[2.5px] border-ink bg-cream/50 shrink-0">
           {['listeners', 'queue', 'chat', 'settings'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 text-center py-3 text-[10px] uppercase font-mono border-r-[2.5px] border-ink last:border-r-0 transition-colors ${activeTab === tab ? 'bg-paper font-bold shadow-[inset_0_3px_0_var(--color-ink)]' : 'text-ink-soft hover:bg-paper/50'}`}>
+              className={`flex-1 text-center py-3.5 sm:py-3 text-[10px] uppercase font-mono border-r-[2.5px] border-ink last:border-r-0 transition-colors ${activeTab === tab ? 'bg-paper font-bold shadow-[inset_0_3px_0_var(--color-ink)]' : 'text-ink-soft hover:bg-paper/50'}`}>
               {tab === 'listeners' ? `${listeners.length} LI` : tab}
             </button>
           ))}
@@ -624,7 +619,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           )}
 
           {activeTab === 'chat' && (
-            <div className="flex-1 flex flex-col overflow-hidden p-4">
+            <div className="flex-1 flex flex-col overflow-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {messages.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-xs font-mono text-ink-soft/70 gap-2">
                   <div className="mb-2"><MessageSquare size={32} className="opacity-50" /></div>
@@ -651,9 +646,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
               )}
               <div className="flex gap-2 mt-4 pt-4 border-t-[2.5px] border-ink border-dashed shrink-0">
                 <input type="text" placeholder="Say something..."
-                  className="flex-1 bg-paper border-2 border-ink rounded-full px-4 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-teal-2 shadow-[inset_2px_2px_0_rgba(0,0,0,0.05)]"
+                  className="flex-1 min-w-0 bg-paper border-2 border-ink rounded-full px-4 py-2.5 text-base sm:text-xs font-mono focus:outline-none focus:ring-2 focus:ring-teal-2 shadow-[inset_2px_2px_0_rgba(0,0,0,0.05)]"
                   value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} />
-                <button onClick={handleSendMessage} className="w-10 h-10 rounded-full bg-coral border-2 border-ink flex items-center justify-center text-sm shadow-[3px_3px_0_var(--color-ink)] hover:translate-y-px hover:translate-x-px hover:shadow-[2px_2px_0_var(--color-ink)] shrink-0">
+                <button onClick={handleSendMessage} className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-coral border-2 border-ink flex items-center justify-center text-sm shadow-[3px_3px_0_var(--color-ink)] hover:translate-y-px hover:translate-x-px hover:shadow-[2px_2px_0_var(--color-ink)] shrink-0">
                   <Send size={16} className="-ml-0.5 mt-0.5" />
                 </button>
               </div>
@@ -663,21 +658,17 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           {activeTab === 'settings' && (
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
-                <h3 className="font-pixel text-lg text-ink mb-2">Backgrounds</h3>
+                <h3 className="font-pixel text-lg text-ink mb-2">My Background</h3>
                 <p className="text-[10px] font-mono text-ink-soft mb-3 leading-relaxed">
-                  Pick from defaults or your library. Max {MAX_BACKGROUNDS_PER_FOLDER} per folder.
+                  Only you see this — everyone in the room picks their own. Up to {MAX_BACKGROUNDS_PER_FOLDER}.
                 </p>
-                {isHost ? (
-                  <BackgroundPicker
-                    selectedUrls={Array.isArray(room.background_urls) ? room.background_urls : []}
-                    onSelectionChange={handleBackgroundSelectionChange}
-                    maxSelection={MAX_BACKGROUNDS_PER_FOLDER}
-                    allowLibraryManagement
-                    compact
-                  />
-                ) : (
-                  <p className="text-xs font-mono text-ink-soft">Only the host can change room backgrounds.</p>
-                )}
+                <BackgroundPicker
+                  selectedUrls={myBackgrounds}
+                  onSelectionChange={handleBackgroundSelectionChange}
+                  maxSelection={MAX_BACKGROUNDS_PER_FOLDER}
+                  allowLibraryManagement
+                  compact
+                />
               </div>
               <div className="bg-cream border-2 border-ink p-4 rounded-xl shadow-[3px_3px_0_var(--color-ink)]">
                 <h3 className="font-pixel text-lg text-ink mb-2">Slideshow Speed</h3>

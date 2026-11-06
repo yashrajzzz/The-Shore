@@ -9,13 +9,13 @@ interface WindowProps {
 
 export function Window({ title, children, className = '', onClose }: WindowProps) {
   return (
-    <div className={`w-full max-w-[1080px] max-h-[85dvh] flex flex-col bg-paper/40 backdrop-blur-md border-[2.5px] border-ink rounded-[16px] shadow-[8px_8px_0_var(--color-ink)] overflow-hidden ${className}`}>
+    <div className={`w-full max-w-[1080px] max-h-[85dvh] flex flex-col bg-paper/40 backdrop-blur-md border-[2.5px] border-ink rounded-[14px] sm:rounded-[16px] shadow-[4px_4px_0_var(--color-ink)] sm:shadow-[8px_8px_0_var(--color-ink)] overflow-hidden ${className}`}>
       {/* Titlebar */}
       <div className="shrink-0 flex items-center justify-between px-3.5 py-2.5 bg-cream-deep/60 backdrop-blur-md border-b-[2.5px] border-ink">
         <div className="flex gap-[7px]">
           <button
             onClick={onClose}
-            className="w-3 h-3 rounded-full border-[1.6px] border-ink bg-coral block cursor-pointer hover:bg-coral-deep"
+            className="relative w-3 h-3 rounded-full border-[1.6px] border-ink bg-coral block cursor-pointer hover:bg-coral-deep before:absolute before:-inset-2.5 before:content-['']"
             title={onClose ? "Close" : ""}
             disabled={!onClose}
           />
@@ -25,7 +25,7 @@ export function Window({ title, children, className = '', onClose }: WindowProps
         <div className="text-[12.5px] text-ink-soft tracking-[0.3px]">
           {title}
         </div>
-        <div style={{ width: '40px' }} /> {/* Spacer for balance */}
+        <div className="w-[33px]" /> {/* Spacer for balance */}
       </div>
       {/* Body — scrolls on its own so growing content (e.g. search results)
           never pushes the titlebar off-screen or gets clipped by the viewport. */}

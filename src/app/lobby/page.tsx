@@ -30,25 +30,25 @@ export default async function LobbyPage({
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0];
 
   return (
-    <div className="flex-1 flex flex-col items-center p-6">
+    <div className="flex-1 flex flex-col items-center px-3 pt-4 pb-28 sm:p-6">
       <div className="fixed inset-0 z-0 pointer-events-none opacity-5 mix-blend-multiply bg-[radial-gradient(var(--color-ink)_1px,transparent_1px)] bg-[size:3px_3px]"></div>
       
-      <div className="relative z-10 w-full max-w-4xl mt-12">
+      <div className="relative z-10 w-full max-w-4xl sm:mt-12">
         {!isHidden ? (
           <ClosableWindow title="My Rooms">
-            <div className="p-4 sm:p-8 min-h-[400px]">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 border-b-[2.5px] border-ink pb-4">
+            <div className="p-4 sm:p-8 sm:min-h-[400px]">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-5 sm:mb-8 border-b-[2.5px] border-ink pb-4">
                 <div>
                   <h1 className="font-pixel text-2xl sm:text-3xl mb-1">Hello, {displayName}!</h1>
                   <p className="text-sm text-ink-soft">Join a room or start your own vibe.</p>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-2 sm:flex gap-3 [&>*]:min-w-0 [&_button]:w-full sm:[&_button]:w-auto">
                   <PlaylistsModal />
                   <CreateRoomModal />
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {rooms && rooms.length > 0 ? rooms.map((room) => (
                   <RoomCardLink href={`/room/${room.id}`} key={room.id} className="block relative group">
                     <div className="h-full bg-cream/80 backdrop-blur-sm border-2 border-ink rounded-xl p-4 shadow-[4px_4px_0_var(--color-ink)] group-hover:-translate-y-1 group-hover:-translate-x-1 group-hover:shadow-[5px_5px_0_var(--color-ink)] transition-all cursor-pointer">
@@ -64,7 +64,7 @@ export default async function LobbyPage({
                       </div>
                       <h3 className="font-pixel text-xl mb-1">{room.name}</h3>
                       <p className="text-xs text-ink-soft line-clamp-1">
-                        {room.background_urls && room.background_urls.length > 0 ? `${room.background_urls.length} Slideshow Backgrounds` : 'Standard room'}
+                        Music room
                       </p>
                     </div>
                   </RoomCardLink>
@@ -77,7 +77,7 @@ export default async function LobbyPage({
             </div>
           </ClosableWindow>
         ) : (
-          <div className="flex justify-center mt-32">
+          <div className="flex justify-center mt-20 sm:mt-32">
             <Link href="/lobby">
               <div className="bg-paper/40 backdrop-blur-md px-6 py-4 rounded-xl border-2 border-ink shadow-[4px_4px_0_var(--color-ink)] text-center cursor-pointer hover:-translate-y-1 transition-all">
                 <p className="font-pixel text-xl text-ink">Enjoy the view!</p>

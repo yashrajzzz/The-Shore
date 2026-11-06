@@ -1,13 +1,12 @@
 'use client';
 
+import { Portal } from './Portal';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { Button } from './Button';
 import { Window } from './Window';
 import { createRoom } from '@/app/actions/rooms';
-import { BackgroundPicker } from './BackgroundPicker';
-import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
 import { useRoomTransition } from './RoomTransition';
 
 export function CreateRoomModal() {
@@ -15,12 +14,10 @@ export function CreateRoomModal() {
   const [error, setError] = useState('');
   const [isPending, setIsPending] = useState(false);
   const [justConfirmed, setJustConfirmed] = useState(false);
-  const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const { enterRoom } = useRoomTransition();
 
   function reset() {
     setIsOpen(false);
-    setSelectedUrls([]);
     setJustConfirmed(false);
     setError('');
   }
@@ -32,9 +29,6 @@ export function CreateRoomModal() {
 
     const formData = new FormData(e.currentTarget);
 
-    for (const url of selectedUrls) {
-      formData.append('background_urls', url);
-    }
 
     const result = await createRoom(formData);
     setIsPending(false);
@@ -62,10 +56,10 @@ export function CreateRoomModal() {
       </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
+        <Portal className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4">
           <div className="w-full max-w-md">
-            <Window title="Create New Room" onClose={() => setIsOpen(false)}>
-              <div className="p-6">
+            <Window title="Create New Room" onClose={() => setIsOpen(false)} className="!bg-paper !backdrop-blur-none">
+              <div className="px-4 pt-4 sm:px-6 sm:pt-6">
                 <form onSubmit={onSubmit} className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-ink-soft uppercase tracking-wider" htmlFor="name">Room Name</label>
@@ -75,25 +69,10 @@ export function CreateRoomModal() {
                       type="text"
                       required
                       disabled={justConfirmed}
-                      className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2 disabled:opacity-60"
+                      className="bg-paper border-[2px] border-ink rounded-lg px-3 py-2.5 text-base sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-2 disabled:opacity-60"
                       placeholder="e.g. #midnightdrive"
                       maxLength={32}
                     />
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs text-ink-soft uppercase tracking-wider">
-                      Slideshow Backgrounds (Max {MAX_BACKGROUNDS_PER_FOLDER})
-                    </label>
-                    <BackgroundPicker
-                      selectedUrls={selectedUrls}
-                      onSelectionChange={setSelectedUrls}
-                      maxSelection={MAX_BACKGROUNDS_PER_FOLDER}
-                      compact
-                    />
-                    <p className="text-[10px] text-ink-soft font-mono mt-1">
-                      Pick from defaults or your library. Backgrounds crossfade every 30 seconds.
-                    </p>
                   </div>
 
                   {error && (
@@ -102,11 +81,11 @@ export function CreateRoomModal() {
                     </div>
                   )}
 
-                  <div className="flex gap-3 mt-4">
+                  <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 mt-2 bg-paper border-t-[2.5px] border-ink flex gap-3">
                     <Button
                       type="button"
                       variant="secondary"
-                      className="flex-1"
+                      className="flex-1 py-2.5"
                       onClick={() => setIsOpen(false)}
                       disabled={justConfirmed}
                     >
@@ -116,7 +95,7 @@ export function CreateRoomModal() {
                       <Button
                         type="submit"
                         variant="primary"
-                        className="w-full overflow-hidden"
+                        className="w-full overflow-hidden py-2.5"
                         disabled={isPending || justConfirmed}
                       >
                         <AnimatePresence mode="wait" initial={false}>
@@ -150,7 +129,7 @@ export function CreateRoomModal() {
               </div>
             </Window>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   );
