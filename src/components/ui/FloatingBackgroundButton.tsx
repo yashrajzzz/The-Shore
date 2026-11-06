@@ -2,22 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { ImageIcon } from 'lucide-react';
-import { setGlobalBackground } from './GlobalBackground';
+import { getPersonalBackgroundUrls, setGlobalBackground } from './GlobalBackground';
 import { BackgroundPickerModal } from './BackgroundPicker';
-
-function readSavedBackgroundUrls(): string[] {
-  if (typeof window === 'undefined') return [];
-  const saved = localStorage.getItem('shore_bg');
-  if (!saved) return [];
-  try {
-    const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed?.urls) return parsed.urls;
-  } catch {
-    return [saved];
-  }
-  return [];
-}
 
 function spark(button: HTMLButtonElement) {
   const rect = button.getBoundingClientRect();
@@ -54,7 +40,7 @@ export function FloatingBackgroundButton() {
 
   const handleOpen = () => {
     if (buttonRef.current) spark(buttonRef.current);
-    setCurrentUrls(readSavedBackgroundUrls());
+    setCurrentUrls(getPersonalBackgroundUrls());
     setIsOpen(true);
   };
 
@@ -64,7 +50,7 @@ export function FloatingBackgroundButton() {
 
   return (
     <>
-      <div className="group fixed bottom-6 right-6 z-50">
+      <div className="group fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 sm:bottom-6 sm:right-6">
         <div className="pointer-events-none absolute bottom-full right-0 mb-3 whitespace-nowrap rounded-md border-2 border-ink bg-ink px-2.5 py-1.5 font-mono text-[10px] font-bold text-paper opacity-0 shadow-[2px_2px_0_var(--color-coral)] transition-all duration-150 group-hover:opacity-100 group-hover:-translate-y-0">
           Change Background
         </div>
@@ -72,10 +58,11 @@ export function FloatingBackgroundButton() {
           ref={buttonRef}
           onClick={handleOpen}
           style={{ animation: 'bg-dial-bob 3.2s ease-in-out infinite' }}
-          className="[animation-play-state:running] group-hover:[animation-play-state:paused] flex h-14 w-14 items-center justify-center rounded-full border-2 border-ink bg-coral shadow-[4px_4px_0_var(--color-ink)] transition-transform duration-200 ease-[cubic-bezier(.34,1.56,.64,1)] hover:-translate-y-1.5 hover:scale-110 hover:rotate-3 hover:shadow-[6px_6px_0_var(--color-ink)] active:scale-95 active:rotate-0"
+          className="[animation-play-state:running] group-hover:[animation-play-state:paused] flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border-2 border-ink bg-coral shadow-[4px_4px_0_var(--color-ink)] transition-transform duration-200 ease-[cubic-bezier(.34,1.56,.64,1)] hover:-translate-y-1.5 hover:scale-110 hover:rotate-3 hover:shadow-[6px_6px_0_var(--color-ink)] active:scale-95 active:rotate-0"
           title="Change Background"
+          aria-label="Change background"
         >
-          <ImageIcon size={28} strokeWidth={2.25} />
+          <ImageIcon className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={2.25} />
         </button>
       </div>
 

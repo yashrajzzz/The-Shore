@@ -2,8 +2,13 @@
 
 import { createClient } from '@/utils/supabase/server';
 import {
+  CATALOG_MAX_FILES,
   MAX_BACKGROUNDS_PER_FOLDER,
   STATIC_DEFAULT_BACKGROUNDS,
+  STATIC_LAPTOP_BACKGROUNDS,
+  STATIC_MOBILE_BACKGROUNDS,
+  isBackgroundMedia,
+  type BackgroundDevice,
   type BackgroundItem,
 } from '@/utils/backgrounds';
 
@@ -49,7 +54,48 @@ export async function listDefaultBackgrounds(): Promise<BackgroundItem[]> {
   return merged;
 }
 
-export async function listUserBackgrounds(): Promise<{ items: BackgroundItem[]; error?: string }> {
+/**
+ * The big curated catalog for a device type. Files are dropped into the
+ * `backgrounds` bucket under `desktop/` or `mobile/` (via the Supabase
+ * dashboard) and show up here automatically, no redeploy needed.
+ * Bundled built-in sets (public/backgrounds/mobile, public/default-backgrounds) are listed first.
+ */
+export async function listCatalogBackgrounds(device: BackgroundDevice): Promise<BackgroundItem[]> {
+  if (device !== 'desktop' && device !== 'mobile') return [];
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.storage
+    .from('backgrounds')
+    .list(device, { limit: CATALOG_MAX_FILES, sortBy: { column: 'name', order: 'asc' } });
+
+  const fromStorage: BackgroundItem[] = error || !data
+    ? []
+    : data
+        .filter((f) => f.name && !f.name.startsWith('.') && isBackgroundMedia(f.name))
+        .map((f) => {
+          const path = `${device}/${f.name}`;
+          const { data: urlData } = supabase.storage.from('backgrounds').getPublicUrl(path);
+          return {
+            url: urlData.publicUrl,
+            path,
+            source: 'default' as const,
+            name: f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
+          };
+        });
+
+  const base = device === 'desktop' ? [...STATIC_DEFAULT_BACKGROUNDS, ...STATIC_LAPTOP_BACKGROUNDS] : STATIC_MOBILE_BACKGROUNDS;
+  const seen = new Set<string>();
+  return [...base, ...fromStorage].filter((item) => {
+    if (seen.has(item.url)) return false;
+    seen.add(item.url);
+    return true;
+  });
+}
+
+export async function listUserBackgrounds(
+  device: BackgroundDevice = 'desktop'
+): Promise<{ items: BackgroundItem[]; error?: string }> {
+  if (device !== 'desktop' && device !== 'mobile') return { items: [], error: 'Invalid device' };
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -57,8 +103,23 @@ export async function listUserBackgrounds(): Promise<{ items: BackgroundItem[]; 
     return { items: [], error: 'Not authenticated' };
   }
 
-  const items = await listStorageBackgrounds(supabase, `users/${user.id}`, 'user');
-  return { items };
+  // Each device has its own 5-slot library: users/{uid}/desktop and users/{uid}/mobile.
+  const items = await listStorageBackgrounds(supabase, `users/${user.id}/${device}`, 'user');
+
+  // Older uploads lived directly in users/{uid}/ — treat them as laptop ones.
+  if (device === 'desktop') {
+    const { data: legacy } = await supabase.storage
+      .from('backgrounds')
+      .list(`users/${user.id}`, { limit: 100 });
+    for (const file of legacy ?? []) {
+      if (!file.id || !file.name || file.name.startsWith('.') || !isBackgroundMedia(file.name)) continue;
+      const path = `users/${user.id}/${file.name}`;
+      const { data: urlData } = supabase.storage.from('backgrounds').getPublicUrl(path);
+      items.push({ url: urlData.publicUrl, path, source: 'user', name: file.name });
+    }
+  }
+
+  return { items: items.slice(0, MAX_BACKGROUNDS_PER_FOLDER) };
 }
 
 export async function deleteUserBackground(storagePath: string): Promise<{ success?: boolean; error?: string }> {
@@ -70,7 +131,7 @@ export async function deleteUserBackground(storagePath: string): Promise<{ succe
   }
 
   const expectedPrefix = `users/${user.id}/`;
-  if (!storagePath.startsWith(expectedPrefix)) {
+  if (!storagePath.startsWith(expectedPrefix) || storagePath.includes('..')) {
     return { error: 'You can only delete your own backgrounds' };
   }
 
@@ -82,11 +143,6 @@ export async function deleteUserBackground(storagePath: string): Promise<{ succe
   return { success: true };
 }
 
-export async function getUserBackgroundCount(): Promise<number> {
-  const { items } = await listUserBackgrounds();
-  return items.length;
-}
-
 export async function uploadUserBackground(formData: FormData): Promise<{ success?: boolean; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -95,19 +151,26 @@ export async function uploadUserBackground(formData: FormData): Promise<{ succes
     return { error: 'Not authenticated' };
   }
 
+  const device = formData.get('device');
+  if (device !== 'desktop' && device !== 'mobile') {
+    return { error: 'Invalid device type' };
+  }
+
   const file = formData.get('file') as File | null;
   if (!file || file.size === 0) {
     return { error: 'No file provided' };
   }
-
-  const currentCount = await getUserBackgroundCount();
-  if (currentCount >= MAX_BACKGROUNDS_PER_FOLDER) {
-    return { error: `Your library is full (${MAX_BACKGROUNDS_PER_FOLDER}/${MAX_BACKGROUNDS_PER_FOLDER}). Delete one to upload more.` };
+  if (!isBackgroundMedia(file.name)) {
+    return { error: 'Unsupported file type' };
   }
 
-  const ext = file.name.split('.').pop() || 'png';
-  const fileName = `${crypto.randomUUID()}.${ext}`;
-  const filePath = `users/${user.id}/${fileName}`;
+  const { items } = await listUserBackgrounds(device);
+  if (items.length >= MAX_BACKGROUNDS_PER_FOLDER) {
+    return { error: `Your ${device === 'mobile' ? 'mobile' : 'laptop'} library is full (${MAX_BACKGROUNDS_PER_FOLDER}/${MAX_BACKGROUNDS_PER_FOLDER}). Delete one to upload more.` };
+  }
+
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const filePath = `users/${user.id}/${device}/${crypto.randomUUID()}.${ext}`;
 
   const { error } = await supabase.storage
     .from('backgrounds')

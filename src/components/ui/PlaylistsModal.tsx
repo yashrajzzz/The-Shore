@@ -1,5 +1,7 @@
 'use client';
 
+import { Portal } from './Portal';
+
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { ListMusic, Plus, Trash2, ChevronLeft, Music, Loader2 } from 'lucide-react';
@@ -270,7 +272,7 @@ export function PlaylistsModal() {
       </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4 sm:p-6 overflow-hidden">
+        <Portal className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4 sm:p-6 overflow-hidden">
           <div className={`w-full flex flex-col min-h-0 max-h-full transition-all duration-300 ${activePlaylist ? 'max-w-[800px]' : 'max-w-md'}`}>
             <Window 
               title={activePlaylist ? 'Playlist' : 'My Playlists'} 
@@ -362,7 +364,7 @@ export function PlaylistsModal() {
               </div>
             </Window>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   );

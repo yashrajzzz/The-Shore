@@ -1,5 +1,6 @@
 'use client';
 
+import { Portal } from './Portal';
 import { useState } from 'react';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
 import { destroyRoom } from '@/app/actions/rooms';
@@ -46,7 +47,7 @@ export function DeleteRoomButton({ roomId }: { roomId: string }) {
       </button>
 
       {showModal && (
-        <div 
+        <Portal 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/20 backdrop-blur-sm"
           onClick={handleCancel}
         >
@@ -87,7 +88,7 @@ export function DeleteRoomButton({ roomId }: { roomId: string }) {
               </button>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   );
