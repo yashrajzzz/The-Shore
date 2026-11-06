@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-shore-v1";
+const CACHE_NAME = "the-shore-v2";
 const PRECACHE_URLS = [
   "/manifest.json",
   "/icons/icon-192.png",
@@ -34,6 +34,16 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.pathname.startsWith("/api/") || url.origin !== self.location.origin) {
+    return;
+  }
+  // Never intercept heavy media / range requests: caching them doubles memory
+  // use and makes video playback stutter. Let the browser handle them.
+  if (
+    request.headers.has("range") ||
+    url.pathname.startsWith("/backgrounds/") ||
+    url.pathname.startsWith("/default-backgrounds/") ||
+    /\.(mp4|webm|gif|webp)$/i.test(url.pathname)
+  ) {
     return;
   }
 
