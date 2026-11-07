@@ -76,6 +76,9 @@ export function SongSearch({
   // so there's no reason to make them stare at a spinner for it. Rolled back
   // only if the background work ends up failing.
   const [addedTrackIds, setAddedTrackIds] = useState<Set<number>>(new Set());
+  // Tracks currently being looked up / written — shown with a spinner, and
+  // only turned into a tick once the song is really in the queue.
+  const [addingTrackIds, setAddingTrackIds] = useState<Set<number>>(new Set());
   const [previewingTrackId, setPreviewingTrackId] = useState<number | null>(null);
   // 0-1 progress through the current preview clip, driving the ring around
   // its artwork so it's unmistakably a private, time-limited preview rather
@@ -267,11 +270,9 @@ export function SongSearch({
   };
 
   const handleAdd = (track: iTunesResult) => {
-    if (addedTrackIds.has(track.trackId)) return;
+    if (addedTrackIds.has(track.trackId) || addingTrackIds.has(track.trackId)) return;
 
-    // Flip to "added" immediately — the lookup + write below happen in the
-    // background. Only undo it if that background work actually fails.
-    setAddedTrackIds(prev => new Set(prev).add(track.trackId));
+    setAddingTrackIds(prev => new Set(prev).add(track.trackId));
     setError('');
 
     const tempId = `temp-${track.trackId}-${tempIdCounterRef.current++}`;
@@ -294,14 +295,16 @@ export function SongSearch({
           duration: track.trackTimeMillis,
           tempId,
         });
+        setAddedTrackIds(prev => new Set(prev).add(track.trackId));
       } catch (err: unknown) {
-        setAddedTrackIds(prev => {
+        setError((err as Error)?.message || 'Failed to add song');
+        onOptimisticAddFailed?.(tempId);
+      } finally {
+        setAddingTrackIds(prev => {
           const next = new Set(prev);
           next.delete(track.trackId);
           return next;
         });
-        setError((err as Error)?.message || 'Failed to add song');
-        onOptimisticAddFailed?.(tempId);
       }
     })();
   };
@@ -476,12 +479,14 @@ export function SongSearch({
                       {/* Add Button */}
                       <button
                         onClick={() => handleAdd(track)}
-                        disabled={addedTrackIds.has(track.trackId)}
-                        title={addedTrackIds.has(track.trackId) ? 'Added' : undefined}
+                        disabled={addedTrackIds.has(track.trackId) || addingTrackIds.has(track.trackId)}
+                        title={addedTrackIds.has(track.trackId) ? 'Added' : addingTrackIds.has(track.trackId) ? 'Adding…' : undefined}
                         className={`w-7 h-7 rounded-lg border-[1.5px] border-ink flex items-center justify-center transition-all shrink-0 bg-teal-2 ${addedTrackIds.has(track.trackId) ? 'cursor-default' : 'shadow-[2px_2px_0_var(--color-ink)] hover:translate-y-px hover:shadow-[1px_1px_0_var(--color-ink)]'}`}
                       >
                         {addedTrackIds.has(track.trackId) ? (
                           <Check size={14} strokeWidth={3} />
+                        ) : addingTrackIds.has(track.trackId) ? (
+                          <Loader2 size={14} strokeWidth={3} className="animate-spin" />
                         ) : (
                           <Plus size={14} strokeWidth={3} />
                         )}

@@ -119,7 +119,7 @@ export async function addToQueue(
   const position = await nextQueuePosition(supabase, roomId)
 
   // Insert into queue with rich metadata
-  const { error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from('queue')
     .insert({
       room_id: roomId,
@@ -131,7 +131,9 @@ export async function addToQueue(
       duration_ms: song.duration,
       added_by: user.id,
       position
-    });
+    })
+    .select()
+    .single();
 
   if (insertError) return { error: insertError.message }
 
@@ -142,7 +144,7 @@ export async function addToQueue(
      await playNextSong(roomId);
   }
 
-  return { success: true }
+  return { success: true, item: inserted }
 }
 
 // Legacy support: add a raw YouTube URL to the queue (fallback)

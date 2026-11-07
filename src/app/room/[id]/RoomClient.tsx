@@ -278,7 +278,18 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   };
 
   const handleAddToQueue = useCallback(async (song: { videoId: string; title: string; artist: string; artwork: string; duration: number }) => {
-    await addToQueue(roomIdStr, song);
+    const res = await addToQueue(roomIdStr, song);
+    if (res?.error) throw new Error(res.error);
+    // Show it in the queue right away instead of waiting on the realtime echo.
+    const item = res?.item as QueueItem | undefined;
+    if (item) {
+      setQueue(prev => {
+        if (prev.some(q => q.id === item.id)) return prev;
+        const next = [...prev, item];
+        next.sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
+        return next;
+      });
+    }
   }, [roomIdStr]);
 
   const handleRemoveFromQueue = useCallback(async (queueItemId: string | number) => {
