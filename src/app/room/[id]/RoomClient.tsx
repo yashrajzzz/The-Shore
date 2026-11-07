@@ -11,11 +11,12 @@ import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlaye
 import { SongSearch } from '@/components/ui/SongSearch';
 import { AddPlaylistToQueue } from '@/components/ui/AddPlaylistToQueue';
 import { SongProgressBar } from '@/components/ui/SongProgressBar';
-import { Image as ImageIcon, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
 import { RoomClock } from '@/components/ui/RoomClock';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ShoreRunnerButton } from '@/components/ui/ShoreRunner';
 import { useRoomTransition } from '@/components/ui/RoomTransition';
 
@@ -58,6 +59,21 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const ytPlayerRef = useRef<YouTubePlayerHandle>(null);
+  // Personal volume (0-100): only affects this listener, remembered on this device.
+  const [volume, setVolumeState] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('shore_volume'));
+      return Number.isFinite(v) && localStorage.getItem('shore_volume') !== null ? Math.min(100, Math.max(0, v)) : 100;
+    } catch {
+      return 100;
+    }
+  });
+  const lastVolumeRef = useRef(volume || 100);
+  const setVolume = useCallback((v: number) => {
+    setVolumeState(v);
+    if (v > 0) lastVolumeRef.current = v;
+    try { localStorage.setItem('shore_volume', String(v)); } catch { /* ignore */ }
+  }, []);
   // Tracks the play/pause state the user last asked for, so rapid clicks
   // coalesce into a single in-flight request instead of flooding the server,
   // and so a realtime echo of an already-superseded state doesn't flicker the UI.
@@ -523,6 +539,14 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   // fetching/buffering a song the room is supposed to be playing.
   const songLoading = !isPreviewing && !playbackError && (pendingSong || Boolean(currentVideoId && room.is_playing && (ytState === -1 || ytState === 3)));
   const isHost = room.created_by === (user as AppUser).id;
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const doLeave = async () => {
+    setLeaving(true);
+    // The host leaving closes the room for everyone.
+    if (isHost) await destroyRoom(roomIdStr);
+    exitRoom('/lobby');
+  };
   const startedAtVal: string | null = room.current_song_started_at == null ? null : (typeof room.current_song_started_at === 'string' ? room.current_song_started_at : new Date(Number(room.current_song_started_at)).toISOString());
 
   return (
@@ -536,6 +560,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         onEnd={handleYTEnd}
         onStateChange={setYtState}
         onError={handleYTError}
+        volume={volume}
       />
 
       {/* Enable audio prompt for listeners (non-hosts) */}
@@ -555,6 +580,12 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           <span className="hidden sm:inline">Backgrounds</span>
         </button>
         <ShoreRunnerButton />
+        <button onClick={() => (isHost ? setConfirmLeave(true) : doLeave())}
+          aria-label="Leave room"
+          title="Leave room"
+          className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex items-center justify-center hover:bg-coral/80 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] transition-all z-[60]">
+          <LogOut size={19} strokeWidth={2.25} />
+        </button>
         <button onClick={() => setIsSidebarOpen(true)}
           className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
@@ -648,8 +679,41 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           {currentVideoId && (
             <SongProgressBar ytPlayerRef={ytPlayerRef} isPlaying={Boolean(room.is_playing)} onSeek={handleSeek} />
           )}
+
+          {/* Volume (only for you) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVolume(volume === 0 ? lastVolumeRef.current : 0)}
+              aria-label={volume === 0 ? 'Unmute' : 'Mute'}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink hover:bg-ink/10"
+            >
+              {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              aria-label="Volume"
+              suppressHydrationWarning
+              className="h-6 min-w-0 flex-1 accent-coral"
+            />
+          </div>
         </div>
       </div>
+
+      {confirmLeave && (
+        <ConfirmDialog
+          title="Close the room?"
+          message="You're the host, so leaving closes the room for everyone."
+          confirmLabel="Close room"
+          busy={leaving}
+          onConfirm={doLeave}
+          onCancel={() => setConfirmLeave(false)}
+        />
+      )}
 
       {/* Sidebar Overlay */}
       {isSidebarOpen && <div className="fixed inset-0 z-[60] bg-ink/10 pointer-events-auto" onClick={() => setIsSidebarOpen(false)}></div>}
@@ -667,7 +731,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
         {/* Tabs */}
         <div className="flex border-b-[2.5px] border-ink bg-cream/50 shrink-0">
-          {['listeners', 'queue', 'chat', 'backgrounds', 'settings'].map(tab => (
+          {['listeners', 'queue', 'chat', 'backgrounds'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`flex-1 min-w-0 text-center py-3.5 sm:py-3 ${tab === 'backgrounds' ? 'text-[9px]' : 'text-[10px]'} uppercase font-mono border-r-[2.5px] border-ink last:border-r-0 transition-colors ${activeTab === tab ? 'bg-paper font-bold shadow-[inset_0_3px_0_var(--color-ink)]' : 'text-ink-soft hover:bg-paper/50'}`}>
               {tab === 'listeners' ? `${listeners.length} LI` : tab}
@@ -795,21 +859,6 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             </div>
           )}
 
-          {activeTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-              <div className="mt-auto pt-6 border-t-[2.5px] border-ink border-dashed">
-                <button onClick={async () => {
-                    if (isHost) {
-                      await destroyRoom(roomIdStr);
-                    }
-                    exitRoom('/lobby');
-                  }}
-                  className="w-full bg-coral border-2 border-ink rounded-xl py-3 text-sm font-bold font-mono shadow-[4px_4px_0_var(--color-ink)] hover:translate-y-0.5 hover:shadow-[2px_2px_0_var(--color-ink)] transition-all flex items-center justify-center gap-2 text-ink">
-                  <LogOut size={16} /> Leave Room
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { nextQueuePosition, playNextSong } from './rooms'
+import { nextQueuePosition, startIfSilent } from './rooms'
 import { MAX_PLAYLISTS, MAX_SONGS_PER_PLAYLIST, type Playlist, type PlaylistSong } from '@/utils/playlists'
 
 export async function listPlaylists(): Promise<{ playlists: Playlist[]; error?: string }> {
@@ -200,15 +200,13 @@ export async function addPlaylistToQueue(roomId: string, playlistId: string): Pr
     position: basePosition + i * 0.001,
   }))
 
-  const { error: insertError } = await supabase.from('queue').insert(rows)
+  const { data: insertedRows, error: insertError } = await supabase.from('queue').insert(rows).select()
   if (insertError) return { error: insertError.message }
 
-  // If the room is currently silent, kick off playback — same behavior as
-  // adding a single song via addToQueue.
-  const { data: room } = await supabase.from('rooms').select('current_song_url').eq('id', roomId).single()
-  if (room && !room.current_song_url) {
-    await playNextSong(roomId)
-  }
+  // If the room is silent (nothing playing / queue had finished), start with
+  // the first song of this playlist.
+  const first = (insertedRows ?? []).slice().sort((x, y) => Number(x.position) - Number(y.position))[0]
+  await startIfSilent(supabase, roomId, first ?? null)
 
   return { success: true, added: rows.length }
 }
