@@ -137,12 +137,7 @@ export async function addToQueue(
 
   if (insertError) return { error: insertError.message }
 
-  // If room is currently silent (no song at all), trigger playNextSong automatically!
-  const { data: room } = await supabase.from('rooms').select('current_song_url').eq('id', roomId).single();
-  
-  if (room && !room.current_song_url) {
-     await playNextSong(roomId);
-  }
+  await startIfSilent(supabase, roomId, inserted as QueueRow | null);
 
   return { success: true, item: inserted }
 }
@@ -173,7 +168,7 @@ export async function addUrlToQueue(roomId: string, videoUrl: string) {
   const position = await nextQueuePosition(supabase, roomId)
 
   // Insert into queue
-  const { error: insertError } = await supabase
+  const { data: insertedRow, error: insertError } = await supabase
     .from('queue')
     .insert({
       room_id: roomId,
@@ -182,16 +177,13 @@ export async function addUrlToQueue(roomId: string, videoUrl: string) {
       title: title,
       added_by: user.id,
       position
-    });
+    })
+    .select()
+    .single();
 
   if (insertError) return { error: insertError.message }
 
-  // If room is currently silent (no song at all), trigger playNextSong automatically!
-  const { data: room } = await supabase.from('rooms').select('current_song_url').eq('id', roomId).single();
-  
-  if (room && !room.current_song_url) {
-     await playNextSong(roomId);
-  }
+  await startIfSilent(supabase, roomId, insertedRow as QueueRow | null);
 
   return { success: true }
 }
@@ -213,6 +205,33 @@ export async function nextQueuePosition(supabase: Awaited<ReturnType<typeof crea
   // fraction keeps two adds in the same millisecond distinct.
   void supabase; void roomId;
   return Date.now() + Math.random();
+}
+
+// Nothing playing: no current song, not playing. Keeps the queue itself.
+async function clearCurrentSong(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string) {
+  await supabase.from('rooms').update({
+    current_song_url: null,
+    current_song_video_id: null,
+    current_song_title: null,
+    current_song_artist: null,
+    current_song_artwork: null,
+    current_song_started_at: null,
+    current_queue_id: null,
+    is_playing: false,
+  }).eq('id', roomId);
+}
+
+// If the room is silent (queue finished, or nothing yet), start the song that
+// was just added. Without this, a finished room kept its last song loaded and
+// pressing play replayed it instead of the newly queued songs.
+export async function startIfSilent(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string, song: QueueRow | null) {
+  if (!song) return;
+  const { data: room } = await supabase.from('rooms').select('current_song_url').eq('id', roomId).single();
+  if (room && !room.current_song_url) {
+    // expectedQueueId null = only if still nothing current, so two adds at
+    // once can't both take over.
+    await setAsCurrentSong(supabase, roomId, song, null);
+  }
 }
 
 // `expectedQueueId` makes the switch a compare-and-set: it only applies if the
@@ -291,9 +310,11 @@ export async function playNextSong(roomId: string, endedQueueId?: string | numbe
   const { data: nextSong, error: qError } = await query.maybeSingle();
 
   if (qError || !nextSong) {
-    // Reached the end of the queue — stop playing but leave the last song
-    // and the queue itself in place, like a playlist that's finished.
-    await supabase.from('rooms').update({ is_playing: false }).eq('id', roomId);
+    // Reached the end of the queue: nothing is playing any more (the queue
+    // itself stays). Clearing the current song, rather than leaving the last
+    // one paused, means songs added next start playing instead of the last
+    // song being replayed.
+    await clearCurrentSong(supabase, roomId);
     return { success: true, message: 'End of queue' };
   }
 
@@ -396,16 +417,7 @@ export async function removeFromQueue(roomId: string, queueItemId: string | numb
     if (nextSong) {
       await setAsCurrentSong(supabase, roomId, nextSong);
     } else {
-      await supabase.from('rooms').update({
-        current_song_url: null,
-        current_song_video_id: null,
-        current_song_title: null,
-        current_song_artist: null,
-        current_song_artwork: null,
-        current_song_started_at: null,
-        current_queue_id: null,
-        is_playing: false,
-      }).eq('id', roomId);
+      await clearCurrentSong(supabase, roomId);
     }
   }
 

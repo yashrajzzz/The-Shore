@@ -32,6 +32,7 @@ interface YouTubePlayerProps {
   onEnd?: () => void;
   onStateChange?: (state: number) => void;
   onError?: (code: number) => void;
+  volume?: number; // 0-100, local to this listener
   onSyncReady?: (player: YouTubePlayerHandle) => void;
   startedAt?: string | null; // ISO timestamp for sync
 }
@@ -67,7 +68,7 @@ function loadYTApi(): Promise<void> {
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
-  function YouTubePlayer({ videoId, playing, onReady, onEnd, onStateChange, onError, onSyncReady, startedAt }, ref) {
+  function YouTubePlayer({ videoId, playing, onReady, onEnd, onStateChange, onError, onSyncReady, startedAt, volume = 100 }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const playerRef = useRef<any>(null);
     const currentVideoIdRef = useRef<string | null>(null);
@@ -103,6 +104,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
     const onErrorRef = useRef(onError);
     useEffect(() => { onErrorRef.current = onError; }, [onError]);
+    const volumeRef = useRef(volume);
+    useEffect(() => {
+      volumeRef.current = volume;
+      try { playerRef.current?.setVolume?.(volume); } catch { /* player not ready yet */ }
+    }, [volume]);
     const onSyncReadyRef = useRef(onSyncReady);
     useEffect(() => { onSyncReadyRef.current = onSyncReady; }, [onSyncReady]);
 
@@ -245,6 +251,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
             // ignore seekTo() called this early (before any buffering has
             // happened), so this is backed up by the onStateChange handler below.
             performSyncRef.current();
+            try { event.target.setVolume(volumeRef.current); } catch { /* ignore */ }
 
             if (playingRef.current) {
               event.target.playVideo();
