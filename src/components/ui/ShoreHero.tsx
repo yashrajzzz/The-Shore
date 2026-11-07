@@ -1,8 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import Link from 'next/link';
 
-import { Button } from './Button';
+import { AuthLinkButton } from './AuthLinkButton';
 
 export function ShoreHero() {
   return (
@@ -44,19 +43,16 @@ export function ShoreHero() {
         </p>
 
         <div className="mt-2 flex w-full max-w-xs gap-3">
-          <Link href="/login" className="flex-1">
-            <Button variant="primary" className="w-full py-3 text-sm">
-              Log In
-            </Button>
-          </Link>
-          <Link href="/login?mode=signup" className="flex-1">
-            <Button
-              variant="secondary"
-              className="w-full rounded-full border-cream bg-transparent py-3 text-sm text-cream hover:bg-cream/15"
-            >
-              Sign Up
-            </Button>
-          </Link>
+          <AuthLinkButton href="/login" variant="primary" className="w-full py-3 text-sm">
+            Log In
+          </AuthLinkButton>
+          <AuthLinkButton
+            href="/login?mode=signup"
+            variant="secondary"
+            className="w-full rounded-full border-cream bg-transparent py-3 text-sm text-cream hover:bg-cream/15"
+          >
+            Sign Up
+          </AuthLinkButton>
         </div>
       </div>
 

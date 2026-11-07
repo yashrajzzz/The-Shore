@@ -119,7 +119,7 @@ export async function addToQueue(
   const position = await nextQueuePosition(supabase, roomId)
 
   // Insert into queue with rich metadata
-  const { error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from('queue')
     .insert({
       room_id: roomId,
@@ -131,7 +131,9 @@ export async function addToQueue(
       duration_ms: song.duration,
       added_by: user.id,
       position
-    });
+    })
+    .select()
+    .single();
 
   if (insertError) return { error: insertError.message }
 
@@ -142,7 +144,7 @@ export async function addToQueue(
      await playNextSong(roomId);
   }
 
-  return { success: true }
+  return { success: true, item: inserted }
 }
 
 // Legacy support: add a raw YouTube URL to the queue (fallback)
@@ -323,6 +325,54 @@ export async function removeFromQueue(roomId: string, queueItemId: string | numb
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+
+  // If the song being removed is the one currently playing, move on to the
+  // next queued song (or clear the player if there is none) before deleting.
+  const { data: room } = await supabase
+    .from('rooms')
+    .select('current_queue_id')
+    .eq('id', roomId)
+    .single();
+
+  const isCurrent = room?.current_queue_id != null && String(room.current_queue_id) === String(queueItemId);
+
+  if (isCurrent) {
+    const { data: removed } = await supabase
+      .from('queue')
+      .select('position')
+      .eq('id', queueItemId)
+      .eq('room_id', roomId)
+      .maybeSingle();
+
+    let nextSong: QueueRow | null = null;
+    if (removed) {
+      const { data } = await supabase
+        .from('queue')
+        .select('*')
+        .eq('room_id', roomId)
+        .neq('id', queueItemId)
+        .gt('position', removed.position)
+        .order('position', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      nextSong = data;
+    }
+
+    if (nextSong) {
+      await setAsCurrentSong(supabase, roomId, nextSong);
+    } else {
+      await supabase.from('rooms').update({
+        current_song_url: null,
+        current_song_video_id: null,
+        current_song_title: null,
+        current_song_artist: null,
+        current_song_artwork: null,
+        current_song_started_at: null,
+        current_queue_id: null,
+        is_playing: false,
+      }).eq('id', roomId);
+    }
+  }
 
   const { error } = await supabase
     .from('queue')

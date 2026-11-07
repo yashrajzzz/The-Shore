@@ -193,6 +193,30 @@ async function scrapeYouTubeSearch(query: string): Promise<YouTubeResult[]> {
   return results;
 }
 
+/**
+ * Many label uploads (T-Series, Saregama, etc.) have embedding disabled, so
+ * the IFrame player refuses to play them (errors 101/150) and the room just
+ * sits silent. YouTube's oEmbed endpoint answers 401 for those, 404 for
+ * deleted/private videos — so drop anything that isn't embeddable.
+ */
+async function filterEmbeddable(results: YouTubeResult[]): Promise<YouTubeResult[]> {
+  const checks = await Promise.all(
+    results.map(async (r) => {
+      try {
+        const res = await fetch(
+          `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${r.videoId}`)}&format=json`,
+          { signal: AbortSignal.timeout(4000) }
+        );
+        // Only a definite "can't embed" drops a result; network hiccups keep it.
+        return !(res.status === 401 || res.status === 403 || res.status === 404);
+      } catch {
+        return true;
+      }
+    })
+  );
+  return results.filter((_, i) => checks[i]);
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('q');
@@ -224,7 +248,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ results });
+    const embeddable = await filterEmbeddable(results);
+    return NextResponse.json({ results: embeddable.length > 0 ? embeddable : results });
   } catch (err) {
     console.error('YouTube search error:', err);
     return NextResponse.json(
