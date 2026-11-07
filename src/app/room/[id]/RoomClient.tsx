@@ -11,7 +11,7 @@ import { YouTubePlayer, YouTubePlayerHandle } from '@/components/ui/YouTubePlaye
 import { SongSearch } from '@/components/ui/SongSearch';
 import { AddPlaylistToQueue } from '@/components/ui/AddPlaylistToQueue';
 import { SongProgressBar } from '@/components/ui/SongProgressBar';
-import { Image as ImageIcon, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, LogOut, SkipBack, Play, Pause, SkipForward, X, Send, Plus, Loader2 } from 'lucide-react';
 import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
@@ -73,6 +73,27 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   // Sync State
   const [room, setRoom] = useState(initialRoom);
   const currentVideoId = room.current_song_video_id || (typeof room.current_song_url === 'string' ? (room.current_song_url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]) : undefined) || null;
+  // YouTube player state (-1 unstarted, 1 playing, 2 paused, 3 buffering...)
+  // plus a flag for the gap between asking the server for another song and
+  // the new song arriving, so the UI says "loading" rather than looking idle.
+  const [ytState, setYtState] = useState(-1);
+  const [pendingSong, setPendingSong] = useState(false);
+  const [playbackError, setPlaybackError] = useState(false);
+  // Reset when a different song arrives (adjusting state during render).
+  const songKey = `${currentVideoId ?? ''}|${room.current_queue_id ?? ''}`;
+  const [seenSongKey, setSeenSongKey] = useState(songKey);
+  if (seenSongKey !== songKey) {
+    setSeenSongKey(songKey);
+    setYtState(-1);
+    setPlaybackError(false);
+    // A song actually arriving ends the wait; being cleared does not.
+    if (currentVideoId) setPendingSong(false);
+  }
+  useEffect(() => {
+    if (!pendingSong) return;
+    const t = setTimeout(() => setPendingSong(false), 10000);
+    return () => clearTimeout(t);
+  }, [pendingSong]);
   const currentVideoIdRef = useRef<string | null>(currentVideoId);
   useEffect(() => { currentVideoIdRef.current = currentVideoId; }, [currentVideoId]);
   const roomIdStr = String((initialRoom && (initialRoom as Room).id) ?? (initialRoom as Room).id ?? '');
@@ -266,6 +287,26 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     // silently out of sync with the DB.
     let removedItem: QueueItem | undefined;
     let removedIndex = -1;
+    const wasCurrent = room.current_queue_id != null && String(room.current_queue_id) === String(queueItemId);
+    if (wasCurrent) {
+      // Removing the playing song: stop it right away; the server moves the
+      // room on to the next queued song (or clears it if there is none).
+      try { ytPlayerRef.current?.pauseVideo(); } catch {}
+      const idx = queue.findIndex(item => item.id === queueItemId);
+      const hasNext = idx !== -1 && idx < queue.length - 1;
+      setPendingSong(hasNext);
+      setRoom(prev => ({
+        ...prev,
+        current_song_started_at: null,
+        current_song_video_id: null,
+        current_song_url: null,
+        current_song_title: undefined,
+        current_song_artist: undefined,
+        current_song_artwork: undefined,
+        current_queue_id: null,
+        ...(hasNext ? {} : { is_playing: false }),
+      }));
+    }
     setQueue(prev => {
       removedIndex = prev.findIndex(item => item.id === queueItemId);
       removedItem = prev.find(item => item.id === queueItemId);
@@ -275,6 +316,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     const res = await removeFromQueue(roomIdStr, queueItemId);
     if (res?.error) {
       alert(res.error);
+      setPendingSong(false);
       const itemToRestore = removedItem;
       const insertAt = removedIndex;
       if (itemToRestore) {
@@ -286,11 +328,12 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         });
       }
     }
-  }, [roomIdStr]);
+  }, [roomIdStr, room.current_queue_id, queue]);
 
   const handlePlaySongNow = useCallback(async (queueItemId: string | number) => {
+    setPendingSong(true);
     const res = await playSongNow(roomIdStr, queueItemId);
-    if (res?.error) alert(res.error);
+    if (res?.error) { setPendingSong(false); alert(res.error); }
   }, [roomIdStr]);
 
   const handleReorderQueue = useCallback(async (orderedIds: (string | number)[]) => {
@@ -333,8 +376,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
       current_song_artist: undefined,
       current_song_artwork: undefined,
     }));
+    setPendingSong(true);
     const res = await playNextSong(roomIdStr);
     if (res?.error) alert(res.error);
+    if (res?.error || res?.message) setPendingSong(false);
   }, [roomIdStr]);
 
   // Handle seek broadcast: when a user seeks the progress bar, update
@@ -409,6 +454,15 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
   const handleYTEnd = useCallback(() => { playNextSong(roomIdStr); }, [roomIdStr]);
 
+  // Codes 2/5/100/101/150: the video can't be played here (embedding disabled,
+  // removed, private). Tell the room and have the host move on, instead of
+  // leaving everyone stuck on a song that never starts.
+  const handleYTError = useCallback((code: number) => {
+    setPlaybackError(true);
+    if (![100, 101, 150].includes(code)) return;
+    if (createdByRef.current === userIdStr) playNextSong(roomIdStr);
+  }, [roomIdStr, userIdStr]);
+
   // Media Session API for hardware media keys
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -434,6 +488,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   }, [room.is_playing, room.current_song_title, room.current_song_artist, room.current_song_artwork, handleTogglePlay, handleNextSong]);
 
 
+  // Loading = waiting on the server for the next song, or the player is still
+  // fetching/buffering a song the room is supposed to be playing.
+  const songLoading = !isPreviewing && !playbackError && (pendingSong || Boolean(currentVideoId && room.is_playing && (ytState === -1 || ytState === 3)));
   const isHost = room.created_by === (user as AppUser).id;
   const startedAtVal: string | null = room.current_song_started_at == null ? null : (typeof room.current_song_started_at === 'string' ? room.current_song_started_at : new Date(Number(room.current_song_started_at)).toISOString());
 
@@ -446,6 +503,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         playing={Boolean(room.is_playing)}
         startedAt={startedAtVal}
         onEnd={handleYTEnd}
+        onStateChange={setYtState}
+        onError={handleYTError}
       />
 
       {/* Enable audio prompt for listeners (non-hosts) */}
@@ -475,7 +534,12 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Center Now Playing */}
       <div className="flex-1 flex flex-col items-center justify-center pointer-events-auto px-4">
-        {room.current_song_title ? (
+        {!room.current_song_title && songLoading ? (
+          <div className="text-center bg-ink/20 backdrop-blur-sm border-2 border-ink/30 px-6 py-4 rounded-2xl drop-shadow-md flex flex-col items-center gap-2" role="status">
+            <Loader2 size={28} className="animate-spin text-paper" aria-hidden />
+            <div className="text-[10px] text-paper uppercase tracking-widest font-mono font-bold">loading next song…</div>
+          </div>
+        ) : room.current_song_title ? (
           <div className="text-center bg-ink/20 backdrop-blur-sm border-2 border-ink/30 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl drop-shadow-md max-w-full">
             {room.current_song_artwork && (
             <NextImage src={room.current_song_artwork} alt="" width={80} height={80} unoptimized className="rounded-xl border-2 border-ink/30 mx-auto mb-3 shadow-lg object-cover" />
@@ -483,6 +547,10 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             <div className="text-[10px] text-paper uppercase tracking-widest font-mono font-bold mb-2">
               {isPreviewing ? (
                 <span className="text-coral">paused · previewing another song</span>
+              ) : playbackError ? (
+                <span className="text-coral">can&apos;t play this song here · skipping</span>
+              ) : songLoading ? (
+                <span className="inline-flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" aria-hidden />loading…</span>
               ) : 'now playing'}
             </div>
             <div className={`font-pixel text-2xl sm:text-3xl md:text-4xl leading-snug max-w-2xl break-words ${isPreviewing ? 'text-paper/40' : 'text-paper'}`}>{room.current_song_title}</div>
@@ -520,7 +588,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
                   {room.current_song_title || "Silence..."}
                 </b>
                 <span className="text-[10px] font-mono font-bold text-ink-soft/90 drop-shadow-sm truncate block">
-                  {room.current_song_artist || "Room Radio"}
+                  {songLoading ? (
+                    <span className="inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin" aria-hidden />Loading song…</span>
+                  ) : (room.current_song_artist || "Room Radio")}
                 </span>
               </div>
             </div>

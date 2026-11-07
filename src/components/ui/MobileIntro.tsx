@@ -1,7 +1,6 @@
 import { Headphones, ListMusic, Radio } from 'lucide-react';
-import Link from 'next/link';
 
-import { Button } from './Button';
+import { AuthLinkButton } from './AuthLinkButton';
 
 const STEPS = [
   { Icon: Radio, tint: 'bg-teal-2', title: 'open a room', body: 'start a listening room in a tap and invite whoever you like.' },
@@ -32,16 +31,16 @@ export function MobileIntro() {
       ))}
 
       <div className="mt-4 flex gap-3">
-        <Link href="/login" className="flex-1">
-          <Button variant="primary" className="w-full py-3 text-sm">
-            Log In
-          </Button>
-        </Link>
-        <Link href="/login?mode=signup" className="flex-1">
-          <Button variant="secondary" className="w-full rounded-full border-[2px] py-3 text-sm hover:bg-teal-1">
-            Sign Up
-          </Button>
-        </Link>
+        <AuthLinkButton href="/login" variant="primary" className="w-full py-3 text-sm">
+          Log In
+        </AuthLinkButton>
+        <AuthLinkButton
+          href="/login?mode=signup"
+          variant="secondary"
+          className="w-full rounded-full border-[2px] py-3 text-sm hover:bg-teal-1"
+        >
+          Sign Up
+        </AuthLinkButton>
       </div>
     </section>
   );

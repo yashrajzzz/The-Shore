@@ -31,6 +31,7 @@ interface YouTubePlayerProps {
   onReady?: () => void;
   onEnd?: () => void;
   onStateChange?: (state: number) => void;
+  onError?: (code: number) => void;
   onSyncReady?: (player: YouTubePlayerHandle) => void;
   startedAt?: string | null; // ISO timestamp for sync
 }
@@ -66,7 +67,7 @@ function loadYTApi(): Promise<void> {
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
-  function YouTubePlayer({ videoId, playing, onReady, onEnd, onStateChange, onSyncReady, startedAt }, ref) {
+  function YouTubePlayer({ videoId, playing, onReady, onEnd, onStateChange, onError, onSyncReady, startedAt }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const playerRef = useRef<any>(null);
     const currentVideoIdRef = useRef<string | null>(null);
@@ -100,6 +101,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
     const onStateChangeRef = useRef(onStateChange);
     useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
+    const onErrorRef = useRef(onError);
+    useEffect(() => { onErrorRef.current = onError; }, [onError]);
     const onSyncReadyRef = useRef(onSyncReady);
     useEffect(() => { onSyncReadyRef.current = onSyncReady; }, [onSyncReady]);
 
@@ -280,6 +283,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           },
           onError: (event: any) => {
             console.error('YouTube Player Error:', event.data);
+            onErrorRef.current?.(event.data);
           },
         },
       });

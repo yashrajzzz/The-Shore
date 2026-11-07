@@ -5,10 +5,9 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRef } from 'react';
 
-import { Button } from './Button';
+import { AuthLinkButton } from './AuthLinkButton';
 
 const CARDS = [
   { src: '/hero/hero-1.webp', alt: 'Music is better together' },
@@ -111,19 +110,16 @@ export function StickyHero() {
               {i === CARDS.length - 1 && (
                 <div className="absolute inset-x-0 bottom-0 flex items-end justify-center bg-gradient-to-t from-black/50 to-transparent px-4 pb-[6%] pt-16">
                   <div className="flex w-full max-w-xs gap-3 sm:max-w-sm sm:gap-4">
-                    <Link href="/login" className="flex-1">
-                      <Button variant="primary" className="w-full py-2 text-xs sm:py-3 sm:text-sm">
-                        Log In
-                      </Button>
-                    </Link>
-                    <Link href="/login?mode=signup" className="flex-1">
-                      <Button
-                        variant="secondary"
-                        className="w-full rounded-full border-[2px] py-2 text-xs text-ink hover:bg-cream sm:py-3 sm:text-sm"
-                      >
-                        Sign Up
-                      </Button>
-                    </Link>
+                    <AuthLinkButton href="/login" variant="primary" className="w-full py-2 text-xs sm:py-3 sm:text-sm">
+                      Log In
+                    </AuthLinkButton>
+                    <AuthLinkButton
+                      href="/login?mode=signup"
+                      variant="secondary"
+                      className="w-full rounded-full border-[2px] py-2 text-xs text-ink hover:bg-cream sm:py-3 sm:text-sm"
+                    >
+                      Sign Up
+                    </AuthLinkButton>
                   </div>
                 </div>
               )}
