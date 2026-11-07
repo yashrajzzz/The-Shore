@@ -27,6 +27,18 @@ export function isVideoBackground(url: string) {
   return lower.endsWith('.mp4') || lower.endsWith('.webm');
 }
 
+/**
+ * Small static thumbnail for a bundled background (made by
+ * scripts/generate-thumbs.mjs), so the picker doesn't download the full GIF
+ * for every tile. Returns null for anything without a generated thumbnail
+ * (bucket catalog, user uploads) — callers fall back to the original.
+ */
+export function bundledThumbnailUrl(url: string): string | null {
+  if (!/^\/(backgrounds\/(desktop|mobile)|default-backgrounds)\//.test(url)) return null;
+  const slash = url.lastIndexOf('/');
+  return `${url.slice(0, slash)}/thumbs/${url.slice(slash + 1).replace(/\.[^./]+$/, '.webp')}`;
+}
+
 /** Admin-curated catalogs live in the `backgrounds` bucket under desktop/ and mobile/. */
 export type BackgroundDevice = 'desktop' | 'mobile';
 

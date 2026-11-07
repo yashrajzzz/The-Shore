@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 
+import { ActiveUsers } from './ActiveUsers';
 import { AuthLinkButton } from './AuthLinkButton';
 
 export function ShoreHero() {
@@ -41,6 +42,8 @@ export function ShoreHero() {
           a place where the music never stops. queue a song, share the aux, and let the night drift in
           — together, wherever you are.
         </p>
+
+        <ActiveUsers />
 
         <div className="mt-2 flex w-full max-w-xs gap-3">
           <AuthLinkButton href="/login" variant="primary" className="w-full py-3 text-sm">

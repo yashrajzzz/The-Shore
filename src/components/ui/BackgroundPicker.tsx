@@ -12,6 +12,7 @@ import {
   MAX_BACKGROUNDS_PER_FOLDER,
   isAnimatedBackground,
   isVideoBackground,
+  bundledThumbnailUrl,
   type BackgroundDevice,
   type BackgroundItem,
 } from '@/utils/backgrounds';
@@ -23,6 +24,8 @@ import {
   invalidateBackgroundLibrary,
 } from '@/utils/backgroundLibraryCache';
 import { Button } from './Button';
+import { ConfirmDialog } from './ConfirmDialog';
+import { removePersonalBackground } from './GlobalBackground';
 import { X, Upload, Trash2, Check, Monitor, Smartphone, Film, ImageIcon, Clapperboard } from 'lucide-react';
 
 type Tab = BackgroundDevice;
@@ -106,7 +109,7 @@ function BackgroundThumbnail({
         {isVideo ? (
           <video src={`${item.url}#t=0.1`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
         ) : (
-          <Image src={item.url} alt={item.name || 'Background'} fill unoptimized loading="lazy" sizes="160px" className="object-cover" />
+          <BgThumb url={item.url} alt={item.name || 'Background'} sizes="160px" />
         )}
       </LazyMount>
 
@@ -143,6 +146,25 @@ function BackgroundThumbnail({
   );
 }
 
+// Shows the small thumbnail when one exists, falling back to the full image
+// if it fails to load.
+function BgThumb({ url, alt, sizes }: { url: string; alt: string; sizes: string }) {
+  const thumb = bundledThumbnailUrl(url);
+  const [failed, setFailed] = useState(false);
+  return (
+    <Image
+      src={thumb && !failed ? thumb : url}
+      alt={alt}
+      fill
+      unoptimized
+      loading="lazy"
+      sizes={sizes}
+      onError={() => { if (thumb) setFailed(true); }}
+      className="object-cover"
+    />
+  );
+}
+
 function SelectedStrip({ urls, onRemove }: { urls: string[]; onRemove: (url: string) => void }) {
   if (urls.length === 0) return null;
   return (
@@ -152,7 +174,7 @@ function SelectedStrip({ urls, onRemove }: { urls: string[]; onRemove: (url: str
           {isVideoBackground(url) ? (
             <video src={`${url}#t=0.1`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
           ) : (
-            <Image src={url} alt="Selected background" fill unoptimized sizes="56px" className="object-cover" />
+            <BgThumb url={url} alt="Selected background" sizes="56px" />
           )}
           <button
             type="button"
@@ -279,21 +301,36 @@ export function BackgroundPicker({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleDelete = async (item: BackgroundItem) => {
-    if (!item.path || item.source !== 'user') return;
-    if (!confirm('Remove this background from your library?')) return;
+  const [pendingDelete, setPendingDelete] = useState<BackgroundItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
+  const handleDelete = (item: BackgroundItem) => {
+    if (!item.path || item.source !== 'user') return;
+    setPendingDelete(item);
+  };
+
+  const confirmDelete = async () => {
+    const item = pendingDelete;
+    if (!item?.path) return;
+    setIsDeleting(true);
     const result = await deleteUserBackground(item.path);
     if (result.error) {
       setError(result.error);
+      setIsDeleting(false);
+      setPendingDelete(null);
       return;
     }
 
     if (onSelectionChange && selectedUrls.includes(item.url)) {
       onSelectionChange(selectedUrls.filter((u) => u !== item.url));
     }
+    // The deleted file may also be part of the background that's currently
+    // running behind the page — stop showing it right away.
+    removePersonalBackground(item.url);
 
     await reloadLibrary(tab);
+    setIsDeleting(false);
+    setPendingDelete(null);
   };
 
   const all = catalog[tab];
@@ -454,6 +491,17 @@ export function BackgroundPicker({
         <div className="bg-pink border-2 border-ink p-2 rounded text-[10px] font-mono text-center">
           {error}
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete this background?"
+          message="It will be removed from your library and from your current background."
+          confirmLabel="Delete"
+          busy={isDeleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

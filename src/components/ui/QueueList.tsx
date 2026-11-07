@@ -223,7 +223,7 @@ export function QueueList({
   isPlaying?: boolean;
   onPlay: (id: string | number) => void;
   onRemove: (id: string | number) => void;
-  onReorder: (orderedIds: (string | number)[]) => void;
+  onReorder: (orderedIds: (string | number)[], movedId: string | number) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -236,7 +236,7 @@ export function QueueList({
     if (oldIndex === -1 || newIndex === -1) return;
 
     const reordered = arrayMove(queue, oldIndex, newIndex);
-    onReorder(reordered.map(item => item.id as string | number));
+    onReorder(reordered.map(item => item.id as string | number), active.id as string | number);
   };
 
   return (

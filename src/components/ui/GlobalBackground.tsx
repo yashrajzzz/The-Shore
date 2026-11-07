@@ -71,6 +71,13 @@ export const setGlobalBackground = (urls: string | string[], interval: number = 
   recompute();
 };
 
+/** Drop one URL from the live background (e.g. after its file was deleted). */
+export const removePersonalBackground = (url: string) => {
+  loadPersonal();
+  if (!personal.urls.includes(url)) return;
+  setGlobalBackground(personal.urls.filter((u) => u !== url), personal.interval);
+};
+
 /** Read the saved personal background (for pre-selecting in the picker). */
 export const getPersonalBackgroundUrls = (): string[] => {
   loadPersonal();

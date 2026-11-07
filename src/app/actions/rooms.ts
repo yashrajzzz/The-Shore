@@ -207,23 +207,24 @@ type QueueRow = {
 };
 
 export async function nextQueuePosition(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string): Promise<number> {
-  const { data } = await supabase
-    .from('queue')
-    .select('position')
-    .eq('room_id', roomId)
-    .order('position', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return (data?.position ?? 0) + 1;
+  // `position` is a double, so a timestamp works as a position: it always sorts
+  // after earlier adds without reading the current max first (that
+  // read-then-write let two simultaneous adds claim the same slot). The random
+  // fraction keeps two adds in the same millisecond distinct.
+  void supabase; void roomId;
+  return Date.now() + Math.random();
 }
 
-async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string, song: QueueRow) {
+// `expectedQueueId` makes the switch a compare-and-set: it only applies if the
+// room is still on that queue row. When many listeners' players report "song
+// ended" at once, exactly one call wins and the rest become no-ops, instead of
+// each skipping ahead another song. Returns whether the switch was applied.
+async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient>>, roomId: string, song: QueueRow, expectedQueueId?: string | number | null): Promise<boolean> {
   // Songs stay in the queue permanently (playlist-style) — we just point
   // current_queue_id at whichever row is playing so playNextSong knows
   // where to resume from, and so replaying an already-played song is just
   // "point here again" rather than needing to re-insert it.
-  await supabase.from('rooms').update({
+  let query = supabase.from('rooms').update({
     current_song_url: song.video_url,
     current_song_video_id: song.video_id || null,
     current_song_title: song.title,
@@ -233,9 +234,21 @@ async function setAsCurrentSong(supabase: Awaited<ReturnType<typeof createClient
     current_queue_id: song.id,
     is_playing: true
   }).eq('id', roomId);
+
+  if (expectedQueueId !== undefined) {
+    query = expectedQueueId === null
+      ? query.is('current_queue_id', null)
+      : query.eq('current_queue_id', expectedQueueId);
+  }
+
+  const { data } = await query.select('id');
+  return (data?.length ?? 0) > 0;
 }
 
-export async function playNextSong(roomId: string) {
+// `endedQueueId`: pass the queue row that just finished when this comes from a
+// player's "ended" event. If the room has already moved on (another listener's
+// call got there first), this does nothing.
+export async function playNextSong(roomId: string, endedQueueId?: string | number | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -247,6 +260,10 @@ export async function playNextSong(roomId: string) {
     .select('current_queue_id')
     .eq('id', roomId)
     .single();
+
+  if (endedQueueId !== undefined && String(room?.current_queue_id ?? '') !== String(endedQueueId ?? '')) {
+    return { success: true, skipped: true };
+  }
 
   let currentPosition: number | null = null;
   if (room?.current_queue_id) {
@@ -280,9 +297,27 @@ export async function playNextSong(roomId: string) {
     return { success: true, message: 'End of queue' };
   }
 
-  await setAsCurrentSong(supabase, roomId, nextSong);
+  await setAsCurrentSong(supabase, roomId, nextSong, endedQueueId);
 
   return { success: true };
+}
+
+// Moving one song only needs one write: give it a position between its new
+// neighbours (positions are doubles), instead of renumbering the whole queue.
+export async function moveQueueItem(roomId: string, queueItemId: string | number, newPosition: number) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  if (!Number.isFinite(newPosition)) return { error: 'Invalid position' }
+
+  const { error } = await supabase
+    .from('queue')
+    .update({ position: newPosition })
+    .eq('id', queueItemId)
+    .eq('room_id', roomId);
+
+  if (error) return { error: error.message }
+  return { success: true }
 }
 
 export async function reorderQueue(roomId: string, orderedIds: (string | number)[]) {
