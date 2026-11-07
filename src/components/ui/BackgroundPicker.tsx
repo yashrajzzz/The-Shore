@@ -12,7 +12,7 @@ import {
   MAX_BACKGROUNDS_PER_FOLDER,
   isAnimatedBackground,
   isVideoBackground,
-  bundledThumbnailUrl,
+  backgroundPoster,
   type BackgroundDevice,
   type BackgroundItem,
 } from '@/utils/backgrounds';
@@ -106,10 +106,10 @@ function BackgroundThumbnail({
       }`}
     >
       <LazyMount className="absolute inset-0">
-        {isVideo ? (
+        {isVideo && !backgroundPoster(item.url) ? (
           <video src={`${item.url}#t=0.1`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
         ) : (
-          <BgThumb url={item.url} alt={item.name || 'Background'} sizes="160px" />
+          <Image src={backgroundPoster(item.url) ?? item.url} alt={item.name || 'Background'} fill unoptimized loading="lazy" sizes="160px" className="object-cover" />
         )}
       </LazyMount>
 
@@ -146,35 +146,16 @@ function BackgroundThumbnail({
   );
 }
 
-// Shows the small thumbnail when one exists, falling back to the full image
-// if it fails to load.
-function BgThumb({ url, alt, sizes }: { url: string; alt: string; sizes: string }) {
-  const thumb = bundledThumbnailUrl(url);
-  const [failed, setFailed] = useState(false);
-  return (
-    <Image
-      src={thumb && !failed ? thumb : url}
-      alt={alt}
-      fill
-      unoptimized
-      loading="lazy"
-      sizes={sizes}
-      onError={() => { if (thumb) setFailed(true); }}
-      className="object-cover"
-    />
-  );
-}
-
 function SelectedStrip({ urls, onRemove }: { urls: string[]; onRemove: (url: string) => void }) {
   if (urls.length === 0) return null;
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 thin-scroll">
       {urls.map((url) => (
         <div key={url} className="relative w-14 h-10 shrink-0 rounded-md overflow-hidden border-2 border-ink bg-ink/10">
-          {isVideoBackground(url) ? (
+          {isVideoBackground(url) && !backgroundPoster(url) ? (
             <video src={`${url}#t=0.1`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
           ) : (
-            <BgThumb url={url} alt="Selected background" sizes="56px" />
+            <Image src={backgroundPoster(url) ?? url} alt="Selected background" fill unoptimized sizes="56px" className="object-cover" />
           )}
           <button
             type="button"

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { isVideoBackground } from '@/utils/backgrounds';
+import { isVideoBackground, backgroundPoster, migrateLegacyBackgroundUrl } from '@/utils/backgrounds';
 
 /**
  * Backgrounds are always the viewer's own choice — never the room host's.
@@ -35,7 +35,7 @@ function loadPersonal() {
     const urls: unknown = Array.isArray(parsed) ? parsed : parsed?.urls;
     if (Array.isArray(urls)) {
       personal = {
-        urls: urls.filter((u): u is string => typeof u === 'string'),
+        urls: urls.filter((u): u is string => typeof u === 'string').map(migrateLegacyBackgroundUrl),
         interval: Number(parsed?.interval) > 0 ? Number(parsed.interval) : DEFAULT_INTERVAL,
       };
       snapshot = personal;
@@ -151,11 +151,21 @@ export function GlobalBackground() {
             }}
           >
             {isVideoBackground(url) ? (
-              <video src={url} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+              <video
+                src={url}
+                poster={backgroundPoster(url)}
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+                disablePictureInPicture
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div
                 className="w-full h-full bg-cover bg-no-repeat bg-center"
-                style={{ backgroundImage: `url("${url}")`, imageRendering: 'pixelated' }}
+                style={{ backgroundImage: `url("${url}")` }}
               />
             )}
           </div>

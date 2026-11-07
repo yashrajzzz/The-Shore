@@ -11,11 +11,11 @@ export type BackgroundItem = {
 
 /** Built-in defaults served from /public/default-backgrounds/ (max 5). */
 export const STATIC_DEFAULT_BACKGROUNDS: BackgroundItem[] = [
-  { url: '/default-backgrounds/home.gif', source: 'default', name: 'Home Vibe' },
-  { url: '/default-backgrounds/morning.gif', source: 'default', name: 'Morning Vibe' },
-  { url: '/default-backgrounds/night.gif', source: 'default', name: 'Night Vibe' },
-  { url: '/default-backgrounds/rainy.gif', source: 'default', name: 'Rainy Vibe' },
-  { url: '/default-backgrounds/sunset.gif', source: 'default', name: 'Sunset Vibe' },
+  { url: '/default-backgrounds/home.mp4', source: 'default', name: 'Home Vibe' },
+  { url: '/default-backgrounds/morning.mp4', source: 'default', name: 'Morning Vibe' },
+  { url: '/default-backgrounds/night.mp4', source: 'default', name: 'Night Vibe' },
+  { url: '/default-backgrounds/rainy.mp4', source: 'default', name: 'Rainy Vibe' },
+  { url: '/default-backgrounds/sunset.mp4', source: 'default', name: 'Sunset Vibe' },
 ];
 
 export function userBackgroundPath(userId: string, fileName: string) {
@@ -25,18 +25,6 @@ export function userBackgroundPath(userId: string, fileName: string) {
 export function isVideoBackground(url: string) {
   const lower = url.toLowerCase();
   return lower.endsWith('.mp4') || lower.endsWith('.webm');
-}
-
-/**
- * Small static thumbnail for a bundled background (made by
- * scripts/generate-thumbs.mjs), so the picker doesn't download the full GIF
- * for every tile. Returns null for anything without a generated thumbnail
- * (bucket catalog, user uploads) — callers fall back to the original.
- */
-export function bundledThumbnailUrl(url: string): string | null {
-  if (!/^\/(backgrounds\/(desktop|mobile)|default-backgrounds)\//.test(url)) return null;
-  const slash = url.lastIndexOf('/');
-  return `${url.slice(0, slash)}/thumbs/${url.slice(slash + 1).replace(/\.[^./]+$/, '.webp')}`;
 }
 
 /** Admin-curated catalogs live in the `backgrounds` bucket under desktop/ and mobile/. */
@@ -59,8 +47,8 @@ export function isAnimatedBackground(url: string) {
 
 /** Portrait backgrounds bundled with the app (public/backgrounds/mobile). More can be added via the bucket's mobile/ folder. */
 export const STATIC_MOBILE_BACKGROUNDS: BackgroundItem[] = [
-  'mobile-01.gif', 'mobile-02.gif', 'mobile-03.gif', 'mobile-04.jpg', 'mobile-05.gif', 'mobile-06.gif',
-  'mobile-07.jpg', 'mobile-08.gif', 'mobile-09.gif', 'mobile-10.gif', 'mobile-11.gif', 'mobile-12.gif',
+  'mobile-01.mp4', 'mobile-02.mp4', 'mobile-03.mp4', 'mobile-04.jpg', 'mobile-05.mp4', 'mobile-06.mp4',
+  'mobile-07.jpg', 'mobile-08.mp4', 'mobile-09.mp4', 'mobile-10.mp4', 'mobile-11.mp4', 'mobile-12.mp4',
 ].map((file, i) => ({
   url: `/backgrounds/mobile/${file}`,
   source: 'default' as const,
@@ -69,23 +57,30 @@ export const STATIC_MOBILE_BACKGROUNDS: BackgroundItem[] = [
 
 /** Landscape backgrounds bundled with the app (public/backgrounds/desktop). More can be added via the bucket's desktop/ folder. */
 export const STATIC_LAPTOP_BACKGROUNDS: BackgroundItem[] = [
-  ['fishing-cats-hut.gif', 'Fishing Cats Hut'],
-  ['koi-pond.gif', 'Koi Pond'],
-  ['cat-on-the-dock.gif', 'Cat On The Dock'],
-  ['cat-on-a-leaf.gif', 'Cat On A Leaf'],
-  ['cats-by-the-lake.gif', 'Cats By The Lake'],
-  ['sword-in-the-meadow.gif', 'Sword In The Meadow'],
-  ['laptop-in-the-park.gif', 'Laptop In The Park'],
-  ['ivy-porch-bell.gif', 'Ivy Porch Bell'],
-  ['autumn-tea-house.gif', 'Autumn Tea House'],
-  ['harbor-bicycle.gif', 'Harbor Bicycle'],
-  ['poster-wall.gif', 'Poster Wall'],
-  ['dusk-vending-machine.gif', 'Dusk Vending Machine'],
-  ['night-bridge.gif', 'Night Bridge'],
-  ['window-fireworks.gif', 'Window Fireworks'],
-  ['rooftop-view.gif', 'Rooftop View'],
+  ['fishing-cats-hut.mp4', 'Fishing Cats Hut'],
+  ['cat-on-the-dock.mp4', 'Cat On The Dock'],
+  ['cats-by-the-lake.mp4', 'Cats By The Lake'],
+  ['laptop-in-the-park.mp4', 'Laptop In The Park'],
+  ['ivy-porch-bell.mp4', 'Ivy Porch Bell'],
+  ['autumn-tea-house.mp4', 'Autumn Tea House'],
+  ['harbor-bicycle.mp4', 'Harbor Bicycle'],
+  ['night-bridge.mp4', 'Night Bridge'],
 ].map(([file, name]) => ({
   url: `/backgrounds/desktop/${file}`,
   source: 'default' as const,
   name,
 }));
+
+/**
+ * Tiny still preview (webp) for bundled video backgrounds, so pickers show a
+ * 10KB image instead of downloading the video. Uploaded videos have none.
+ */
+export function backgroundPoster(url: string): string | undefined {
+  if (!/^\/(backgrounds|default-backgrounds)\/.+\.mp4$/i.test(url)) return undefined;
+  return url.replace(/\.mp4$/i, '.webp');
+}
+
+/** Bundled GIFs were converted to MP4; map old saved URLs to the new files. */
+export function migrateLegacyBackgroundUrl(url: string): string {
+  return /^\/(backgrounds|default-backgrounds)\/.+\.gif$/i.test(url) ? url.replace(/\.gif$/i, '.mp4') : url;
+}
