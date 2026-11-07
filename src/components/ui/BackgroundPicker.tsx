@@ -24,6 +24,8 @@ import {
   invalidateBackgroundLibrary,
 } from '@/utils/backgroundLibraryCache';
 import { Button } from './Button';
+import { ConfirmDialog } from './ConfirmDialog';
+import { removePersonalBackground } from './GlobalBackground';
 import { X, Upload, Trash2, Check, Monitor, Smartphone, Film, ImageIcon, Clapperboard } from 'lucide-react';
 
 type Tab = BackgroundDevice;
@@ -280,21 +282,36 @@ export function BackgroundPicker({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleDelete = async (item: BackgroundItem) => {
-    if (!item.path || item.source !== 'user') return;
-    if (!confirm('Remove this background from your library?')) return;
+  const [pendingDelete, setPendingDelete] = useState<BackgroundItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
+  const handleDelete = (item: BackgroundItem) => {
+    if (!item.path || item.source !== 'user') return;
+    setPendingDelete(item);
+  };
+
+  const confirmDelete = async () => {
+    const item = pendingDelete;
+    if (!item?.path) return;
+    setIsDeleting(true);
     const result = await deleteUserBackground(item.path);
     if (result.error) {
       setError(result.error);
+      setIsDeleting(false);
+      setPendingDelete(null);
       return;
     }
 
     if (onSelectionChange && selectedUrls.includes(item.url)) {
       onSelectionChange(selectedUrls.filter((u) => u !== item.url));
     }
+    // The deleted file may also be part of the background that's currently
+    // running behind the page — stop showing it right away.
+    removePersonalBackground(item.url);
 
     await reloadLibrary(tab);
+    setIsDeleting(false);
+    setPendingDelete(null);
   };
 
   const all = catalog[tab];
@@ -455,6 +472,17 @@ export function BackgroundPicker({
         <div className="bg-pink border-2 border-ink p-2 rounded text-[10px] font-mono text-center">
           {error}
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete this background?"
+          message="It will be removed from your library and from your current background."
+          confirmLabel="Delete"
+          busy={isDeleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   );

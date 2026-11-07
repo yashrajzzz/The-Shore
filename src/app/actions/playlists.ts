@@ -185,9 +185,9 @@ export async function addPlaylistToQueue(roomId: string, playlistId: string): Pr
   if (songsError) return { error: songsError.message }
   if (!songs || songs.length === 0) return { error: 'Playlist is empty' }
 
-  let position = await nextQueuePosition(supabase, roomId)
+  const basePosition = await nextQueuePosition(supabase, roomId)
 
-  const rows = songs.map((s) => ({
+  const rows = songs.map((s, i) => ({
     room_id: roomId,
     video_url: `https://www.youtube.com/watch?v=${s.video_id}`,
     video_id: s.video_id,
@@ -196,7 +196,8 @@ export async function addPlaylistToQueue(roomId: string, playlistId: string): Pr
     artwork: s.artwork,
     duration_ms: s.duration_ms,
     added_by: user.id,
-    position: position++,
+    // Small steps keep the whole batch together and in order.
+    position: basePosition + i * 0.001,
   }))
 
   const { error: insertError } = await supabase.from('queue').insert(rows)

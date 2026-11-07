@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import NextImage from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue } from '@/app/actions/rooms';
+import { addToQueue, playNextSong, playSongNow, setPlayPause, sendMessage, removeFromQueue, destroyRoom, reorderQueue, moveQueueItem } from '@/app/actions/rooms';
 import { setGlobalBackground, usePersonalBackground } from '@/components/ui/GlobalBackground';
 import { BackgroundPicker } from '@/components/ui/BackgroundPicker';
 import { MAX_BACKGROUNDS_PER_FOLDER } from '@/utils/backgrounds';
@@ -16,6 +16,7 @@ import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
 import { RoomClock } from '@/components/ui/RoomClock';
+import { ShoreRunnerButton } from '@/components/ui/ShoreRunner';
 import { useRoomTransition } from '@/components/ui/RoomTransition';
 
 type Room = {
@@ -94,6 +95,8 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     const t = setTimeout(() => setPendingSong(false), 10000);
     return () => clearTimeout(t);
   }, [pendingSong]);
+  const currentQueueIdRef = useRef<string | number | null>(null);
+  useEffect(() => { currentQueueIdRef.current = (room.current_queue_id as string | number | null | undefined) ?? null; }, [room.current_queue_id]);
   const currentVideoIdRef = useRef<string | null>(currentVideoId);
   useEffect(() => { currentVideoIdRef.current = currentVideoId; }, [currentVideoId]);
   const roomIdStr = String((initialRoom && (initialRoom as Room).id) ?? (initialRoom as Room).id ?? '');
@@ -347,20 +350,35 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     if (res?.error) { setPendingSong(false); alert(res.error); }
   }, [roomIdStr]);
 
-  const handleReorderQueue = useCallback(async (orderedIds: (string | number)[]) => {
-    // Optimistically reflect the new order locally; realtime UPDATEs from
-    // the server write will just confirm the same order for other clients.
+  const handleReorderQueue = useCallback(async (orderedIds: (string | number)[], movedId: string | number) => {
+    // Only the dragged song needs a new position: put it between its new
+    // neighbours. One write instead of renumbering every row.
+    const pos = (id: string | number | undefined) =>
+      id === undefined ? undefined : Number(queue.find(q => q.id === id)?.position);
+    const at = orderedIds.indexOf(movedId);
+    const before = pos(orderedIds[at - 1]);
+    const after = pos(orderedIds[at + 1]);
+    let newPos: number;
+    if (before !== undefined && after !== undefined) newPos = (before + after) / 2;
+    else if (before !== undefined) newPos = before + 1;
+    else if (after !== undefined) newPos = after - 1;
+    else newPos = 1;
+
+    // Neighbours too close for a double to split cleanly: renumber everything.
+    const tooTight = before !== undefined && after !== undefined && Math.abs(after - before) < 1e-6;
+
     setQueue(prev => {
-      const byId = new Map(prev.map(item => [item.id, item]));
-      const reordered = orderedIds.map((id, idx) => {
-        const item = byId.get(id);
-        return item ? { ...item, position: idx + 1 } : item;
-      }).filter(Boolean) as QueueItem[];
-      return reordered;
+      const next = tooTight
+        ? orderedIds.map((id, idx) => ({ ...(prev.find(q => q.id === id) as QueueItem), position: idx + 1 }))
+        : prev.map(item => (item.id === movedId ? { ...item, position: newPos } : item));
+      return next.sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
     });
-    const res = await reorderQueue(roomIdStr, orderedIds);
+
+    const res = tooTight
+      ? await reorderQueue(roomIdStr, orderedIds)
+      : await moveQueueItem(roomIdStr, movedId, newPos);
     if (res?.error) alert(res.error);
-  }, [roomIdStr]);
+  }, [roomIdStr, queue]);
 
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
@@ -463,7 +481,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
     sendPlayPause(desiredPlaying);
   }, [room.is_playing, sendPlayPause, isPreviewing]);
 
-  const handleYTEnd = useCallback(() => { playNextSong(roomIdStr); }, [roomIdStr]);
+  // Every listener's player fires "ended" at once; passing which song ended
+  // lets the server apply only the first and ignore the rest.
+  const handleYTEnd = useCallback(() => { playNextSong(roomIdStr, currentQueueIdRef.current); }, [roomIdStr]);
 
   // Codes 2/5/100/101/150: the video can't be played here (embedding disabled,
   // removed, private). Tell the room and have the host move on, instead of
@@ -471,7 +491,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
   const handleYTError = useCallback((code: number) => {
     setPlaybackError(true);
     if (![100, 101, 150].includes(code)) return;
-    if (createdByRef.current === userIdStr) playNextSong(roomIdStr);
+    if (createdByRef.current === userIdStr) playNextSong(roomIdStr, currentQueueIdRef.current);
   }, [roomIdStr, userIdStr]);
 
   // Media Session API for hardware media keys
@@ -534,6 +554,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           <ImageIcon size={18} strokeWidth={2.25} />
           <span className="hidden sm:inline">Backgrounds</span>
         </button>
+        <ShoreRunnerButton />
         <button onClick={() => setIsSidebarOpen(true)}
           className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>

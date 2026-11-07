@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { ListMusic, Plus, Trash2, ChevronLeft, Music, Loader2 } from 'lucide-react';
 import { Window } from './Window';
 import { Button } from './Button';
+import { ConfirmDialog } from './ConfirmDialog';
 import { SongSearch } from './SongSearch';
 import {
   listPlaylists,
@@ -244,8 +245,9 @@ export function PlaylistsModal() {
     await load();
   };
 
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const handleDelete = async (playlistId: string) => {
-    if (!confirm('Delete this playlist? This cannot be undone.')) return;
+    setPendingDeleteId(null);
     setPlaylists(prev => prev.filter(p => p.id !== playlistId));
     const res = await deletePlaylist(playlistId);
     if (res?.error) {
@@ -270,6 +272,16 @@ export function PlaylistsModal() {
       <Button variant="secondary" className="px-6 py-2" onClick={() => setIsOpen(true)}>
         <ListMusic size={12} className="mr-1.5" /> My Playlists
       </Button>
+
+      {pendingDeleteId && (
+        <ConfirmDialog
+          title="Delete this playlist?"
+          message="This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => handleDelete(pendingDeleteId)}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
 
       {isOpen && (
         <Portal className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-ink/30 backdrop-blur-[2px] p-4 sm:p-6 overflow-hidden">
@@ -345,7 +357,7 @@ export function PlaylistsModal() {
                               </div>
                             </div>
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleDelete(playlist.id); }}
+                              onClick={(e) => { e.stopPropagation(); setPendingDeleteId(playlist.id); }}
                               className="w-7 h-7 rounded-lg border-[1.5px] border-ink bg-paper flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-pink/60 transition-all shrink-0"
                               title="Delete playlist"
                             >
