@@ -16,6 +16,7 @@ import { InviteModal } from '@/components/ui/InviteModal';
 import { EnableAudioPrompt } from '@/components/ui/EnableAudioPrompt';
 import { QueueList } from '@/components/ui/QueueList';
 import { RoomClock } from '@/components/ui/RoomClock';
+import { ShoreRunnerButton } from '@/components/ui/ShoreRunner';
 import { useRoomTransition } from '@/components/ui/RoomTransition';
 
 type Room = {
@@ -553,6 +554,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           <ImageIcon size={18} strokeWidth={2.25} />
           <span className="hidden sm:inline">Backgrounds</span>
         </button>
+        <ShoreRunnerButton />
         <button onClick={() => setIsSidebarOpen(true)}
           className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
