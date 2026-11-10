@@ -18,6 +18,7 @@ import { QueueList } from '@/components/ui/QueueList';
 import { RoomClock } from '@/components/ui/RoomClock';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ShoreRunnerButton } from '@/components/ui/ShoreRunner';
+import { RoomTour } from '@/components/ui/RoomTour';
 import { useRoomTransition } from '@/components/ui/RoomTransition';
 
 type Room = {
@@ -37,12 +38,17 @@ type Room = {
 
 type AppUser = { id?: string; email?: string; display_name?: string };
 
-export default function RoomClient({ room: initialRoom, user }: { room: Room, user: AppUser }) {
+export default function RoomClient({ room: initialRoom, user, tourUnseen = false }: { room: Room, user: AppUser, tourUnseen?: boolean }) {
   type Listener = { email?: string; display_name?: string; is_host?: boolean; [k: string]: unknown };
   type QueueItem = { id?: string | number; artwork?: string; title?: string; artist?: string; position?: number; [k:string]: unknown };
   type Message = { id?: string | number; user_id?: string; user_email?: string; user_display_name?: string; content?: string; created_at?: string; [k:string]: unknown };
   const [activeTab, setActiveTab] = useState('listeners');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const tourOpenSidebar = useCallback((tab: 'listeners' | 'queue' | 'chat' | 'backgrounds') => {
+    setActiveTab(tab);
+    setIsSidebarOpen(true);
+  }, []);
+  const tourCloseSidebar = useCallback(() => setIsSidebarOpen(false), []);
   // True while a search-result preview clip is playing locally. The room's
   // actual player is muted/paused underneath without touching shared
   // `room.is_playing`, so the UI must be told explicitly — otherwise the
@@ -579,14 +585,18 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           <ImageIcon size={18} strokeWidth={2.25} />
           <span className="hidden sm:inline">Backgrounds</span>
         </button>
+        <RoomTour initiallyUnseen={tourUnseen} openSidebar={tourOpenSidebar} closeSidebar={tourCloseSidebar} />
         <ShoreRunnerButton />
         <button onClick={() => (isHost ? setConfirmLeave(true) : doLeave())}
+          data-tour="leave"
           aria-label="Leave room"
           title="Leave room"
           className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex items-center justify-center hover:bg-coral/80 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] transition-all z-[60]">
           <LogOut size={19} strokeWidth={2.25} />
         </button>
         <button onClick={() => setIsSidebarOpen(true)}
+          data-tour="menu"
+          aria-label="Open side panel"
           className="w-11 h-11 sm:w-12 sm:h-12 bg-paper/60 backdrop-blur-md border-[2.5px] border-ink rounded-xl shadow-[3px_3px_0_var(--color-ink)] sm:shadow-[4px_4px_0_var(--color-ink)] flex flex-col items-center justify-center gap-[3px] hover:bg-paper/90 transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0_var(--color-ink)] z-[60]">
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
           <span className="w-5 h-[2.5px] bg-ink rounded-full"></span>
@@ -638,7 +648,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
 
       {/* Floating Player Bar */}
       <div className="px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-8 flex justify-center pointer-events-auto shrink-0 z-[40]">
-        <div className="w-full sm:w-[380px] max-w-[420px] bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-5 py-3.5 shadow-[6px_6px_0_var(--color-ink)] flex flex-col gap-3.5">
+        <div data-tour="player" className="w-full sm:w-[380px] max-w-[420px] bg-paper/40 backdrop-blur-xl border-[2.5px] border-ink rounded-2xl px-4 sm:px-5 py-3.5 shadow-[6px_6px_0_var(--color-ink)] flex flex-col gap-3.5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {room.current_song_artwork ? (
@@ -681,7 +691,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
           )}
 
           {/* Volume (only for you) */}
-          <div className="flex items-center gap-2">
+          <div data-tour="volume" className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setVolume(volume === 0 ? lastVolumeRef.current : 0)}
@@ -730,9 +740,9 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b-[2.5px] border-ink bg-cream/50 shrink-0">
+        <div data-tour="tabs" className="flex border-b-[2.5px] border-ink bg-cream/50 shrink-0">
           {['listeners', 'queue', 'chat', 'backgrounds'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
+            <button key={tab} onClick={() => setActiveTab(tab)} data-tour={`tab-${tab}`}
               className={`flex-1 min-w-0 text-center py-3.5 sm:py-3 ${tab === 'backgrounds' ? 'text-[9px]' : 'text-[10px]'} uppercase font-mono border-r-[2.5px] border-ink last:border-r-0 transition-colors ${activeTab === tab ? 'bg-paper font-bold shadow-[inset_0_3px_0_var(--color-ink)]' : 'text-ink-soft hover:bg-paper/50'}`}>
               {tab === 'listeners' ? `${listeners.length} LI` : tab}
             </button>
@@ -756,7 +766,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
               ))}
               <div className="mt-4 flex justify-center">
                 {/* Invite modal button */}
-                <div>
+                <div data-tour="invite">
                   {/* InviteModal renders its own button and modal */}
                   {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
                   {/* @ts-ignore */}
@@ -773,7 +783,7 @@ export default function RoomClient({ room: initialRoom, user }: { room: Room, us
             // shrink-0 search block + flex-1 queue list, so a tall result
             // set never gets silently clipped by the parent's overflow-hidden.
             <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col p-4 gap-4">
-              <div className="shrink-0 flex flex-col gap-2">
+              <div data-tour="queue-search" className="shrink-0 flex flex-col gap-2">
                 <AddPlaylistToQueue roomId={roomIdStr} />
                 <SongSearch onAddToQueue={handleAddToQueue} ytPlayerRef={ytPlayerRef} isRoomPlaying={Boolean(room.is_playing)} onPreviewStateChange={setIsPreviewing} enablePlaylistSave />
               </div>

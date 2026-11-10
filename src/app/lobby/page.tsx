@@ -4,7 +4,9 @@ import { PlaylistsModal } from "@/components/ui/PlaylistsModal";
 import { DeleteRoomButton } from "@/components/ui/DeleteRoomButton";
 import { ClosableWindow } from "@/components/ui/ClosableWindow";
 import { RoomCardLink } from "@/components/ui/RoomCardLink";
+import { LobbyTour } from "@/components/ui/LobbyTour";
 import { createClient } from "@/utils/supabase/server";
+import { hasSeenTour } from "@/utils/tour";
 import { redirect } from "next/navigation";
 
 export default async function LobbyPage({
@@ -39,16 +41,19 @@ export default async function LobbyPage({
             <div className="p-4 sm:p-8 sm:min-h-[400px]">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-5 sm:mb-8 border-b-[2.5px] border-ink pb-4">
                 <div>
-                  <h1 className="font-pixel text-2xl sm:text-3xl mb-1">Hello, {displayName}!</h1>
+                  <div className="flex items-center gap-3 mb-1">
+                    <h1 className="font-pixel text-2xl sm:text-3xl">Hello, {displayName}!</h1>
+                    <LobbyTour initiallyUnseen={!hasSeenTour(user, 'lobby')} />
+                  </div>
                   <p className="text-sm text-ink-soft">Join a room or start your own vibe.</p>
                 </div>
                 <div className="grid grid-cols-2 sm:flex gap-3 [&>*]:min-w-0 [&_button]:w-full sm:[&_button]:w-auto">
-                  <PlaylistsModal />
-                  <CreateRoomModal />
+                  <div data-tour="playlists"><PlaylistsModal /></div>
+                  <div data-tour="create-room"><CreateRoomModal /></div>
                 </div>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+
+              <div data-tour="room-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {rooms && rooms.length > 0 ? rooms.map((room) => (
                   <RoomCardLink href={`/room/${room.id}`} key={room.id} className="block relative group">
                     <div className="h-full bg-cream/80 backdrop-blur-sm border-2 border-ink rounded-xl p-4 shadow-[4px_4px_0_var(--color-ink)] group-hover:-translate-y-1 group-hover:-translate-x-1 group-hover:shadow-[5px_5px_0_var(--color-ink)] transition-all cursor-pointer">
