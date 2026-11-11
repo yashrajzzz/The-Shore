@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { hasSeenTour } from "@/utils/tour";
 import { redirect } from "next/navigation";
 import RoomClient from "./RoomClient";
 
@@ -25,6 +26,10 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   await supabase.from('rooms').update({ last_active_at: new Date().toISOString() }).eq('id', room.id);
 
   return (
-    <RoomClient room={room} user={{ id: user.id, email: user.email, display_name: user.user_metadata?.display_name }} />
+    <RoomClient
+      room={room}
+      user={{ id: user.id, email: user.email, display_name: user.user_metadata?.display_name }}
+      tourUnseen={!hasSeenTour(user, 'room')}
+    />
   );
 }
