@@ -16,6 +16,7 @@
   --color-pink: #F2C9C3;
 
   --font-mono: var(--font-space-mono), monospace;
+  --font-serif: var(--font-space-mono), monospace;
   --font-pixel: var(--font-vt323), monospace;
   --font-arcade: var(--font-press-start), monospace;
 }
