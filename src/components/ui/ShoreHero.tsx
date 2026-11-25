@@ -1,8 +1,8 @@
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 
-import { ActiveUsers } from './ActiveUsers';
 import { AuthLinkButton } from './AuthLinkButton';
+import { TotalUsers } from './TotalUsers';
 
 export function ShoreHero() {
   return (
@@ -43,7 +43,7 @@ export function ShoreHero() {
           — together, wherever you are.
         </p>
 
-        <ActiveUsers />
+        <TotalUsers />
 
         <div className="mt-2 flex w-full max-w-xs gap-3">
           <AuthLinkButton href="/login" variant="primary" className="w-full py-3 text-sm">
